@@ -6,7 +6,7 @@ Mods for [Windhawk](https://windhawk.net/) that extend and customize Windows. Ea
 
 | Mod | What it does | Status | Downloads |
 |---|---|---|---|
-| [Clipboard Tweaks](clipboard-tweaks/) | Replaces Win+V with a more powerful, feature-rich clipboard | Pre-release (0.1.0) | [Releases](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/releases?q=clipboard-tweaks&expanded=true) |
+| [Clipboard Tweaks](clipboard-tweaks/) | Replaces Win+V with a more powerful, feature-rich clipboard | Pre-release (0.6.0) | [Releases](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/releases?q=clipboard-tweaks&expanded=true) |
 
 ## Requirements
 

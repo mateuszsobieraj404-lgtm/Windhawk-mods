@@ -4,6 +4,48 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-14
+
+### Added
+
+- Image editor in its own window: brush, highlighter, eraser, text with size, bold, italic and underline, arrows, lines, circles, squares, rectangles and speech bubbles, blur for hiding data, and crop with fixed aspect ratios.
+- Objects stay editable until saving: select, move, restyle or delete them, with undo and redo.
+- Zoom from 5% to 1600%, fit to window and 100%, and moving the view with Space or the middle mouse button.
+- **Save as new** and **Save and copy** add the result as a new image and keep the original. Closing with unsaved changes asks first.
+- Image viewer for a quick look at an image in full size.
+
+## [0.5.0] - 2026-10-14
+
+### Added
+
+- Settings page: theme, background transparency, details panel mode, pinned layout, automatic cleanup of the history, full resolution images, and window size and position.
+- Every keyboard shortcut, including Win+V, can be changed or turned off, with conflicts shown before saving.
+- Export of pinned items, categories, tags, templates, settings and optionally the history to one file, with an optional password, and import that merges or replaces.
+
+## [0.4.0] - 2026-10-14
+
+### Added
+
+- Templates tab: reusable texts with a name, an emoji and fields filled in when pasting: `{data}`, `{godzina}` and `{schowek}`.
+- A template can have its own shortcut that pastes it in any app.
+
+## [0.3.0] - 2026-10-14
+
+### Added
+
+- Item details in a side panel or in place of the list, with the full content, a preview of images in their original resolution, paste options, organizing and information about the item.
+- Editing text items in place (F2).
+- **Paste as** plain text, **Save as…** to a file and **Open** for links, files and images.
+
+## [0.2.0] - 2026-10-14
+
+### Added
+
+- Pinned tab: pinned items are kept until removed, and can have a category, #tags, an emoji and a color mark.
+- Categories with a name, an emoji and a color, in a side column or as collapsible sections, and filtering by tag.
+- Search by #tag.
+- Trash: deleted items stay for 30 days and can be restored or deleted for good.
+
 ## [0.1.0] - 2026-10-14
 
 ### Added
