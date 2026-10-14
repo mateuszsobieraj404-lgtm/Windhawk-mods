@@ -3,7 +3,7 @@
 // @name            Clipboard Tweaks
 // @description     A modern clipboard manager that replaces Win+V: unlimited, encrypted history, pinned items, templates and an image editor
 // @description:pl-PL Nowoczesny schowek zamiast Win+V: historia bez limitu, szyfrowana, przypięte, szablony i edytor grafik
-// @version         0.7.0
+// @version         0.7.1
 // @author          Mateusz Sobieraj & Claude
 // @github          https://github.com/mateuszsobieraj404-lgtm
 // @homepage        https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/tree/main/clipboard-tweaks
@@ -20,7 +20,7 @@ A modern clipboard manager that replaces the Windows Win+V panel with a Fluent
 2 window. It keeps everything you copy, without a limit and across restarts,
 and removes items only when you tell it to.
 
-> **Pre-release (0.7.0).** All planned features are in. Version 1.0.0 follows
+> **Pre-release (0.7.1).** All planned features are in. Version 1.0.0 follows
 > after a full round of testing.
 
 ## Features
@@ -190,6 +190,7 @@ constexpr ULONG_PTR kInputTag = 0x43547770;
 // Start menu closed when Win is released and lets this process take the
 // foreground.
 constexpr WORD kDummyVk = 0xE8;
+constexpr UINT kHookRefreshMs = 5000;  // How often the keyboard hook is installed again.
 
 enum : UINT {
     WM_APP_TOGGLE = WM_APP + 1,  // The open shortcut, from the hook thread.
@@ -12005,18 +12006,36 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
 
+// When the hook answers too slowly, Windows passes the key on, so Win+V opens
+// the built-in panel, and then removes the hook without a word. A top priority
+// keeps it fast, and installing it again every few seconds brings it back.
 DWORD WINAPI HookThread(void*) {
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
     MSG msg;
     PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
     HMODULE module = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCWSTR)&KeyboardProc, &module);
-    HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, module, 0);
-    if (!hook) {
-        Wh_Log(L"SetWindowsHookEx failed: %u", GetLastError());
-    }
+    HHOOK hook = nullptr;
+    auto install = [&] {
+        // The new hook goes in first, so no key slips through in between.
+        HHOOK fresh = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, module, 0);
+        if (!fresh) {
+            Wh_Log(L"SetWindowsHookEx failed: %u", GetLastError());
+            return;
+        }
+        if (hook) {
+            UnhookWindowsHookEx(hook);
+        }
+        hook = fresh;
+    };
+    install();
+    SetTimer(nullptr, 0, kHookRefreshMs, nullptr);
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == WM_TIMER) {
+            install();
+        }
     }
     if (hook) {
         UnhookWindowsHookEx(hook);
