@@ -3,7 +3,7 @@
 // @name            Clipboard Tweaks
 // @description     A modern clipboard manager that replaces Win+V: unlimited, encrypted history, pinned items, templates and an image editor
 // @description:pl-PL Nowoczesny schowek zamiast Win+V: historia bez limitu, szyfrowana, przypięte, szablony i edytor grafik
-// @version         0.7.1
+// @version         0.7.2
 // @author          Mateusz Sobieraj & Claude
 // @github          https://github.com/mateuszsobieraj404-lgtm
 // @homepage        https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/tree/main/clipboard-tweaks
@@ -20,14 +20,14 @@ A modern clipboard manager that replaces the Windows Win+V panel with a Fluent
 2 window. It keeps everything you copy, without a limit and across restarts,
 and removes items only when you tell it to.
 
-> **Pre-release (0.7.1).** All planned features are in. Version 1.0.0 follows
+> **Pre-release (0.7.2).** All planned features are in. Version 1.0.0 follows
 > after a full round of testing.
 
 ## Features
 
 - **Replaces Win+V**: Win+V opens Clipboard Tweaks instead of the built-in
-  panel. Turn the mod off in Windhawk and the built-in panel comes back. The
-  shortcut can be changed in the settings.
+  panel. Turn the mod off in Windhawk and the built-in panel comes back after
+  the next sign-in. The shortcut can be changed in the settings.
 - **History without a limit**: text, formatted text (HTML, RTF), links,
   colors, images in their original resolution and copied files. Copying the
   same thing again moves it to the top instead of adding a duplicate.
@@ -119,6 +119,9 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 - Pasting into an app that runs as administrator doesn't work, because Windows
   doesn't let a regular app send keystrokes to it. The item is still put on
   the clipboard, so you can paste it with Ctrl+V.
+- Right after the mod is installed, Win+V still opens the built-in panel while
+  an app that runs as administrator, such as Windhawk, is in front. Windows
+  Explorer gives up Win+V the next time you sign in.
 
 ## Credits
 
@@ -556,6 +559,7 @@ UINT64 g_storageBytes;  // Size of the data folder, for the settings page.
 
 // Shared with the hook thread.
 volatile UINT g_openKey = Key(MOD_WIN, 'V');
+volatile bool g_openRegistered;  // Windows sends the open shortcut, not the hook.
 volatile bool g_recordingKey;
 
 // Worker queue.
@@ -2327,6 +2331,46 @@ void ApplyWindowsHistorySetting(bool disable) {
         SetWindowsHistory(Wh_GetIntValue(L"historyPrevious", -1));
         Wh_SetIntValue(L"historyOverridden", 0);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Win+V in Explorer
+
+// Explorer takes Win+V for the built-in clipboard as it starts, unless V is in
+// this list. Until then only the keyboard hook can take Win+V, and Windows hides
+// keys from it in front of apps run as administrator.
+constexpr wchar_t kExplorerKey[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+
+// Adds or removes the V. A V that was there before stays.
+void BlockExplorerWinV(bool block) {
+    if (block == (Wh_GetIntValue(L"winVBlocked", 0) != 0)) {
+        return;
+    }
+    WCHAR buffer[64];
+    DWORD size = sizeof(buffer);
+    LSTATUS status = RegGetValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys",
+                                  RRF_RT_REG_SZ, nullptr, buffer, &size);
+    if (status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND) {
+        return;  // Not a short text: left as it is.
+    }
+    std::wstring keys = status == ERROR_SUCCESS ? buffer : L"";
+    size_t v = keys.find(L'V');
+    if (block) {
+        if (v != std::wstring::npos) {
+            return;
+        }
+        keys += L'V';
+    } else if (v != std::wstring::npos) {
+        keys.erase(v, 1);
+    }
+    if (keys.empty()) {
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys");
+    } else {
+        RegSetKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys", REG_SZ,
+                        keys.c_str(), (DWORD)((keys.size() + 1) * sizeof(WCHAR)));
+    }
+    Wh_SetIntValue(L"winVBlocked", block);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4502,11 +4546,21 @@ std::wstring SettingKey(int i) {
     return std::wstring(L"key.") + kShortcuts[i].id;
 }
 
+constexpr int kOpenHotkeyId = 1;
+
+// The open shortcut is registered with Windows when it's free, so it works in
+// front of apps run as administrator too; otherwise the keyboard hook takes it.
 void LoadShortcuts() {
     for (int i = 0; i < ScCount; i++) {
         g_keys[i] = (UINT)Setting(SettingKey(i).c_str(), kShortcuts[i].def);
     }
-    g_openKey = g_keys[ScOpen];
+    UINT key = g_keys[ScOpen];
+    g_openKey = key;
+    UnregisterHotKey(g_hwnd, kOpenHotkeyId);
+    g_openRegistered = key && !(key & kKeyOff) &&
+                       RegisterHotKey(g_hwnd, kOpenHotkeyId, (key >> 16) | MOD_NOREPEAT,
+                                      key & 0xFFFF);
+    BlockExplorerWinV(key == Key(MOD_WIN, 'V'));
 }
 
 void SetShortcut(int i, UINT key) {
@@ -11604,6 +11658,7 @@ void Shutdown() {
     g_quitting = true;
     ShutdownEditor();
     ExpireToast();  // Commits a cleared history that is still offered back.
+    UnregisterHotKey(g_hwnd, kOpenHotkeyId);
     for (size_t i = 0; i < g_hotkeyItems.size(); i++) {
         UnregisterHotKey(g_hwnd, kHotkeyBase + (int)i);
     }
@@ -11890,6 +11945,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
 
         case WM_HOTKEY: {
+            if (wParam == kOpenHotkeyId) {
+                TogglePanel();
+                return 0;
+            }
             int i = (int)wParam - kHotkeyBase;
             if (i >= 0 && i < (int)g_hotkeyItems.size() && g_hotkeyItems[i]) {
                 PasteTemplateHotkey(g_hotkeyItems[i]);
@@ -11985,7 +12044,7 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
                 PostMessageW(g_hwnd, WM_APP_RECORD, vk, mods);
                 return 1;
             }
-            UINT key = g_openKey;
+            UINT key = g_openRegistered ? 0 : g_openKey;
             if (down && key && !(key & kKeyOff) && vk == (key & 0xFFFF) &&
                 (g_swallowVk == vk || HookMods() == key >> 16)) {
                 if (g_swallowVk != vk) {  // Auto-repeat doesn't toggle again.
@@ -12178,6 +12237,11 @@ void WhTool_ModUninit() {
         WaitForSingleObject(g_uiThread, 30000);
     }
     ApplyWindowsHistorySetting(false);
+    // Explorer gets Win+V back as it starts next, unless the mod only ends with
+    // the session.
+    if (!GetSystemMetrics(SM_SHUTTINGDOWN)) {
+        BlockExplorerWinV(false);
+    }
 }
 
 // Windhawk tool mod implementation for mods which don't need to inject to other
