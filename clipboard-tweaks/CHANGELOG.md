@@ -4,6 +4,13 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-14
+
+### Fixed
+
+- Win+V sometimes opened the built-in Windows clipboard instead of Clipboard Tweaks.
+- Three warnings shown in Windhawk's editor when compiling the mod.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added
