@@ -2,7 +2,7 @@
 
 A modern clipboard manager that replaces the Windows Win+V panel with a Fluent 2 window. It keeps everything you copy, without a limit and across restarts, and removes items only when you tell it to.
 
-> **Pre-release (0.7.0).** All planned features are in. Version 1.0.0 follows after a full round of testing.
+> **Pre-release (0.7.1).** All planned features are in. Version 1.0.0 follows after a full round of testing.
 
 [Download the latest version](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/releases?q=clipboard-tweaks&expanded=true) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/issues/new)
 
@@ -62,6 +62,10 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 ## Known issues
 
 - Pasting into an app that runs as administrator doesn't work, because Windows doesn't let a regular app send keystrokes to it. The item is still put on the clipboard, so you can paste it with Ctrl+V.
+
+## Credits
+
+Designed by Mateusz Sobieraj and built together with Claude, an AI assistant by Anthropic.
 
 ## Installation
 

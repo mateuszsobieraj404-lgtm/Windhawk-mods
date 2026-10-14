@@ -4,6 +4,12 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-14
+
+### Changed
+
+- The author is shown as **Mateusz Sobieraj & Claude**, and the readme has a **Credits** section.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added
