@@ -11,6 +11,7 @@ Use this template for `<mod-id>/README.md` and for the readme block in `<mod-id>
 - **Catalog limits for the `.wh.cpp` readme.** Markdown image syntax only (no HTML `<img>`), images hosted on `raw.githubusercontent.com` or `i.imgur.com`, still images under 2 MB, GIFs under 20 MB.
 - **Explain only what isn't obvious.** Windhawk already shows every setting's name and description. The readme covers what they don't: how to open the mod, shortcuts, required Windows settings, and where data is stored.
 - **Be honest about limits.** List known issues and the Windows versions the mod was tested on.
+- **License.** Every mod declares `// @license MIT` in its metadata, matching the repository [LICENSE](../LICENSE).
 - **Plain style.** English, sentence-case headings without emoji, short paragraphs, `**Bold**` for UI labels exactly as Windows or Windhawk shows them.
 
 ## Template

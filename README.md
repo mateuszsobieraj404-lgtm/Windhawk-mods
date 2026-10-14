@@ -57,3 +57,7 @@ The folder name, the file name and the mod's `@id` are always the same.
 ## Documenting a mod
 
 Every mod has two readmes with the same core text: the readme block inside `<mod-id>.wh.cpp`, which Windhawk shows on the mod's page, and `<mod-id>/README.md` on GitHub, which adds download and changelog links. Start from the [mod README template](docs/mod-readme-template.md).
+
+## License
+
+All mods in this repository are released under the [MIT License](LICENSE). Each mod also declares it in its metadata with `@license MIT`.
