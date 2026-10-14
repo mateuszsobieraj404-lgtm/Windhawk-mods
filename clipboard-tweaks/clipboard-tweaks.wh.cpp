@@ -3275,8 +3275,9 @@ void OpenEmojiPicker(const D2D1_RECT_F& anchor, Hit owner,
     D2D1_SIZE_F size{kColumns * kCell + 16, rows * kCell + 16 + 36};
     OpenFlyout(anchor, owner, size, [pick](D2D1_RECT_F r) {
         for (int i = 0; i < (int)ARRAYSIZE(kEmojis); i++) {
+            int row = i / kColumns;
             float x = r.left + 8 + (i % kColumns) * kCell;
-            float y = r.top + 8 + (i / kColumns) * kCell;
+            float y = r.top + 8 + row * kCell;
             D2D1_RECT_F cell{x, y, x + kCell, y + kCell};
             Hit h = HIT(i);
             Fill(Inset(cell, 2, 2), SubtleFill(h), 4);
@@ -7748,8 +7749,8 @@ void ShowCategoryDialog(UINT64 id, std::function<void(UINT64)> created) {
             int columns = 11;
             float cell = (right - x) / columns;
             for (int i = -1; i < (int)ARRAYSIZE(kEmojis); i++) {
-                int k = i + 1;
-                float cx = x + (k % columns) * cell, cy = y + (k / columns) * cell;
+                int k = i + 1, row = k / columns;
+                float cx = x + (k % columns) * cell, cy = y + row * cell;
                 D2D1_RECT_F r{cx, cy, cx + cell, cy + cell};
                 Hit h = HIT(i);
                 bool selected = i < 0 ? d.emoji.empty() : d.emoji == kEmojis[i];
@@ -7773,7 +7774,8 @@ void ShowCategoryDialog(UINT64 id, std::function<void(UINT64)> created) {
                     region.tip = Tr(L"Bez emoji: ikona folderu", L"No emoji: folder icon");
                 }
             }
-            y += ((ARRAYSIZE(kEmojis) + 1 + columns - 1) / columns) * cell + 10;
+            int rows = (ARRAYSIZE(kEmojis) + columns) / columns;
+            y += rows * cell + 10;
             y = Label(Tr(L"Kolor (opcjonalnie)", L"Color (optional)"), x, y, right);
             float cx = x + 14;
             for (BYTE c = 0; c < kColorCount; c++) {
