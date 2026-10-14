@@ -63,6 +63,10 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 
 - Pasting into an app that runs as administrator doesn't work, because Windows doesn't let a regular app send keystrokes to it. The item is still put on the clipboard, so you can paste it with Ctrl+V.
 
+## Credits
+
+Designed by Mateusz Sobieraj and built together with Claude, an AI assistant by Anthropic.
+
 ## Installation
 
 See [Installation](../README.md#installation) in the repository readme.

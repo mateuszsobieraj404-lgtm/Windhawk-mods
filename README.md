@@ -34,30 +34,6 @@ Found a bug or have an idea? [Open an issue](https://github.com/mateuszsobieraj4
 - the steps that lead to the problem,
 - the mod's log: in the mod's **Details**, open the **Advanced** tab, set **Debug logging** to **Mod logs**, click **Show log output**, and reproduce the problem.
 
-## Repository layout
-
-```
-<mod-id>/
-  <mod-id>.wh.cpp   mod source with its metadata, readme and settings
-  README.md         features, screenshots, usage, compatibility, known issues
-  CHANGELOG.md      one section per released version
-  images/           screenshots and GIFs used by the readmes
-docs/
-  mod-readme-template.md
-```
-
-The folder name, the file name and the mod's `@id` are always the same.
-
-## Versioning and releases
-
-- Each mod follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). `0.x` versions are pre-releases.
-- The version is the mod's `@version` metadata value. To release a new version, bump `@version` and add a matching `## [x.y.z] - YYYY-MM-DD` section to the mod's `CHANGELOG.md`, following [Keep a Changelog](https://keepachangelog.com/).
-- When the change reaches `main`, the [release workflow](.github/workflows/release.yml) tags it `<mod-id>-v<x.y.z>` and publishes a GitHub release with the changelog section as release notes and the `.wh.cpp` file attached. Versions that were already released are skipped.
-
-## Documenting a mod
-
-Every mod has two readmes with the same core text: the readme block inside `<mod-id>.wh.cpp`, which Windhawk shows on the mod's page, and `<mod-id>/README.md` on GitHub, which adds download and changelog links. Start from the [mod README template](docs/mod-readme-template.md).
-
 ## License
 
 All mods in this repository are released under the [MIT License](LICENSE). Each mod also declares it in its metadata with `@license MIT`.

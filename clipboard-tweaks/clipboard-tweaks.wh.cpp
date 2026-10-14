@@ -4,7 +4,7 @@
 // @description     A modern clipboard manager that replaces Win+V: unlimited, encrypted history, pinned items, templates and an image editor
 // @description:pl-PL Nowoczesny schowek zamiast Win+V: historia bez limitu, szyfrowana, przypięte, szablony i edytor grafik
 // @version         0.7.0
-// @author          Mateusz Sobieraj
+// @author          Mateusz Sobieraj & Claude
 // @github          https://github.com/mateuszsobieraj404-lgtm
 // @homepage        https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/tree/main/clipboard-tweaks
 // @include         windhawk.exe
@@ -119,6 +119,11 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 - Pasting into an app that runs as administrator doesn't work, because Windows
   doesn't let a regular app send keystrokes to it. The item is still put on
   the clipboard, so you can paste it with Ctrl+V.
+
+## Credits
+
+Designed by Mateusz Sobieraj and built together with Claude, an AI assistant
+by Anthropic.
 */
 // ==/WindhawkModReadme==
 
