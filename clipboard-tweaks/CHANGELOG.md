@@ -4,6 +4,13 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-14
+
+### Added
+
+- English interface. The mod shows Polish on a Polish Windows and English everywhere else, and **Settings** → **Language** picks one by hand.
+- Template fields have English names: `{date}`, `{time}` and `{clipboard}`. The Polish names still work, so existing templates don't change.
+
 ## [0.6.0] - 2026-10-14
 
 ### Added

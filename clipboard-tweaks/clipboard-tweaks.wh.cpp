@@ -3,7 +3,7 @@
 // @name            Clipboard Tweaks
 // @description     A modern clipboard manager that replaces Win+V: unlimited, encrypted history, pinned items, templates and an image editor
 // @description:pl-PL Nowoczesny schowek zamiast Win+V: historia bez limitu, szyfrowana, przypięte, szablony i edytor grafik
-// @version         0.6.0
+// @version         0.7.0
 // @author          Mateusz Sobieraj
 // @github          https://github.com/mateuszsobieraj404-lgtm
 // @homepage        https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/tree/main/clipboard-tweaks
@@ -20,7 +20,7 @@ A modern clipboard manager that replaces the Windows Win+V panel with a Fluent
 2 window. It keeps everything you copy, without a limit and across restarts,
 and removes items only when you tell it to.
 
-> **Pre-release (0.6.0).** All planned features are in. Version 1.0.0 follows
+> **Pre-release (0.7.0).** All planned features are in. Version 1.0.0 follows
 > after a full round of testing.
 
 ## Features
@@ -39,9 +39,9 @@ and removes items only when you tell it to.
   emoji and a color mark. Categories show in a side column or as collapsible
   sections.
 - **Templates**: reusable texts with fields filled in when you paste them:
-  `{data}` (today's date), `{godzina}` (the time) and `{schowek}` (what's on
-  the clipboard). A template can have its own shortcut that pastes it in any
-  app.
+  `{date}` (today's date), `{time}` (the time) and `{clipboard}` (what's on
+  the clipboard). The Polish names `{data}`, `{godzina}` and `{schowek}` work
+  too. A template can have its own shortcut that pastes it in any app.
 - **Item details**: press Space or click the panel icon to see the full
   content, an image preview, paste options, organizing and information about
   the item, in a side panel or in place of the list.
@@ -54,8 +54,8 @@ and removes items only when you tell it to.
   viewer. Saving adds a new image and keeps the original as it was.
 - **Trash**: deleted items stay in the trash for 30 days and can be restored.
   **Clear history** can be undone for 10 seconds.
-- **Settings page**: theme, background transparency, details panel and
-  pinned layout, automatic cleanup of the history, full resolution images,
+- **Settings page**: language, theme, background transparency, details panel
+  and pinned layout, automatic cleanup of the history, full resolution images,
   window size and position, and every keyboard shortcut.
 - **Move to another computer**: export pinned items, categories, tags,
   templates, settings and optionally the history to one file, protected with
@@ -63,6 +63,8 @@ and removes items only when you tell it to.
 - **Window that fits your workflow**: resize it from any edge, and keep it on
   top with the pin button. It follows the Windows light or dark mode and
   accent color, with a translucent acrylic background.
+- **English and Polish**: the interface is in Polish on a Polish Windows and
+  in English everywhere else. The language can be changed in the settings.
 - **Private by design**: items are stored encrypted with your Windows account,
   and content that apps mark as private, such as passwords from a password
   manager, is never saved.
@@ -114,7 +116,6 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 
 ## Known issues
 
-- The interface is in Polish.
 - Pasting into an app that runs as administrator doesn't work, because Windows
   doesn't let a regular app send keystrokes to it. The item is still put on
   the clipboard, so you can paste it with Ctrl+V.
@@ -261,6 +262,7 @@ constexpr wchar_t kIconExport = 0xEDE1;
 constexpr wchar_t kIconImport = 0xE8B5;
 constexpr wchar_t kIconTemplate = 0xE8A5;
 constexpr wchar_t kIconTheme = 0xE790;
+constexpr wchar_t kIconLanguage = 0xE774;
 constexpr wchar_t kIconTransparency = 0xE706;
 constexpr wchar_t kIconLayout = 0xE80A;
 constexpr wchar_t kIconClock = 0xE823;
@@ -356,19 +358,38 @@ struct LoadResult {
     UINT64 nextId = 1;
 };
 
+// The interface is Polish on a Polish Windows and English everywhere else, unless the
+// "language" setting picks one (see ApplyLook).
+bool g_english = PRIMARYLANGID(GetUserDefaultUILanguage()) != LANG_POLISH;
+
+const wchar_t* Tr(const wchar_t* pl, const wchar_t* en) {
+    return g_english ? en : pl;
+}
+
+// A text in both languages, for tables.
+struct Bilingual {
+    const wchar_t* pl;
+    const wchar_t* en;
+    operator const wchar_t*() const { return Tr(pl, en); }
+};
+
+// Template fields, filled in when pasting. Both names of a field work in any language.
+constexpr Bilingual kTemplateFields[] = {
+    {L"{data}", L"{date}"}, {L"{godzina}", L"{time}"}, {L"{schowek}", L"{clipboard}"}};
+
 // Category colors: dark mode, light mode, name.
 struct ColorDef {
     UINT32 dark, light;
-    const wchar_t* name;
+    Bilingual name;
 };
 constexpr ColorDef kCategoryColors[] = {
-    {0, 0, L"Bez koloru"},
-    {0x62ABF5, 0x0F6CBD, L"Niebieski"},
-    {0x6CCB5F, 0x107C10, L"Zielony"},
-    {0xF7A35C, 0xCA5010, L"Pomarańczowy"},
-    {0xC19AF5, 0x8764B8, L"Fioletowy"},
-    {0xEE88C0, 0xC239B3, L"Różowy"},
-    {0x9A9A9A, 0x7A7A7A, L"Szary"},
+    {0, 0, {L"Bez koloru", L"No color"}},
+    {0x62ABF5, 0x0F6CBD, {L"Niebieski", L"Blue"}},
+    {0x6CCB5F, 0x107C10, {L"Zielony", L"Green"}},
+    {0xF7A35C, 0xCA5010, {L"Pomarańczowy", L"Orange"}},
+    {0xC19AF5, 0x8764B8, {L"Fioletowy", L"Purple"}},
+    {0xEE88C0, 0xC239B3, {L"Różowy", L"Pink"}},
+    {0x9A9A9A, 0x7A7A7A, {L"Szary", L"Gray"}},
 };
 constexpr int kColorCount = 7;
 
@@ -426,42 +447,63 @@ enum ShortcutScope : BYTE { kScopeGlobal, kScopeWindow, kScopeEditor };
 
 struct ShortcutDef {
     const wchar_t* id;
-    const wchar_t* label;
+    Bilingual label;
     UINT def;
     ShortcutScope scope;
 };
 
 constexpr ShortcutDef kShortcuts[ScCount] = {
-    {L"open", L"Otwórz lub zamknij okno", Key(MOD_WIN, 'V'), kScopeGlobal},
-    {L"paste", L"Wklej", Key(0, VK_RETURN), kScopeWindow},
-    {L"pastePlain", L"Wklej jako zwykły tekst", Key(MOD_SHIFT, VK_RETURN), kScopeWindow},
-    {L"details", L"Szczegóły elementu", Key(0, VK_SPACE), kScopeWindow},
-    {L"search", L"Szukaj, także po #tagu", Key(MOD_CONTROL, 'F'), kScopeWindow},
-    {L"pin", L"Przypnij do kategorii", Key(MOD_CONTROL, 'P'), kScopeWindow},
-    {L"nth", L"Wklej n-ty element", Key(MOD_CONTROL, '1'), kScopeWindow},
-    {L"delete", L"Usuń element do kosza", Key(0, VK_DELETE), kScopeWindow},
-    {L"edit", L"Edytuj element", Key(0, VK_F2), kScopeWindow},
-    {L"nextTab", L"Następna zakładka", Key(MOD_CONTROL, VK_TAB), kScopeWindow},
-    {L"close", L"Zamknij szczegóły, wyszukiwanie lub okno", Key(0, VK_ESCAPE), kScopeWindow},
-    {L"edSelect", L"Zaznacz i przesuń", Key(0, 'V'), kScopeEditor},
-    {L"edBrush", L"Pędzel", Key(0, 'B'), kScopeEditor},
-    {L"edHighlighter", L"Zakreślacz", Key(0, 'H'), kScopeEditor},
-    {L"edEraser", L"Gumka", Key(0, 'E'), kScopeEditor},
-    {L"edText", L"Tekst", Key(0, 'T'), kScopeEditor},
-    {L"edShape", L"Kształty", Key(0, 'S'), kScopeEditor},
-    {L"edBlur", L"Zamazywanie", Key(0, 'M'), kScopeEditor},
-    {L"edCrop", L"Kadrowanie", Key(0, 'C'), kScopeEditor},
-    {L"edUndo", L"Cofnij", Key(MOD_CONTROL, 'Z'), kScopeEditor},
-    {L"edRedo", L"Ponów", Key(MOD_CONTROL, 'Y'), kScopeEditor},
-    {L"edSave", L"Zapisz jako nowy", Key(MOD_CONTROL, 'S'), kScopeEditor},
-    {L"edZoomIn", L"Powiększ", Key(MOD_CONTROL, VK_OEM_PLUS), kScopeEditor},
-    {L"edZoomOut", L"Pomniejsz", Key(MOD_CONTROL, VK_OEM_MINUS), kScopeEditor},
-    {L"edFit", L"Dopasuj do okna", Key(MOD_CONTROL, '0'), kScopeEditor},
-    {L"edActual", L"Rozmiar 100%", Key(MOD_CONTROL, '1'), kScopeEditor},
-    {L"edBold", L"Pogrubienie tekstu", Key(MOD_CONTROL, 'B'), kScopeEditor},
-    {L"edItalic", L"Kursywa tekstu", Key(MOD_CONTROL, 'I'), kScopeEditor},
-    {L"edUnderline", L"Podkreślenie tekstu", Key(MOD_CONTROL, 'U'), kScopeEditor},
-    {L"edDelete", L"Usuń zaznaczony obiekt", Key(0, VK_DELETE), kScopeEditor},
+    {L"open",
+     {L"Otwórz lub zamknij okno", L"Open or close the window"},
+     Key(MOD_WIN, 'V'),
+     kScopeGlobal},
+    {L"paste", {L"Wklej", L"Paste"}, Key(0, VK_RETURN), kScopeWindow},
+    {L"pastePlain",
+     {L"Wklej jako zwykły tekst", L"Paste as plain text"},
+     Key(MOD_SHIFT, VK_RETURN),
+     kScopeWindow},
+    {L"details", {L"Szczegóły elementu", L"Item details"}, Key(0, VK_SPACE), kScopeWindow},
+    {L"search",
+     {L"Szukaj, także po #tagu", L"Search, also by #tag"},
+     Key(MOD_CONTROL, 'F'),
+     kScopeWindow},
+    {L"pin", {L"Przypnij do kategorii", L"Pin to a category"}, Key(MOD_CONTROL, 'P'), kScopeWindow},
+    {L"nth", {L"Wklej n-ty element", L"Paste the n-th item"}, Key(MOD_CONTROL, '1'), kScopeWindow},
+    {L"delete",
+     {L"Usuń element do kosza", L"Move the item to the trash"},
+     Key(0, VK_DELETE),
+     kScopeWindow},
+    {L"edit", {L"Edytuj element", L"Edit the item"}, Key(0, VK_F2), kScopeWindow},
+    {L"nextTab", {L"Następna zakładka", L"Next tab"}, Key(MOD_CONTROL, VK_TAB), kScopeWindow},
+    {L"close",
+     {L"Zamknij szczegóły, wyszukiwanie lub okno", L"Close the details, the search or the window"},
+     Key(0, VK_ESCAPE),
+     kScopeWindow},
+    {L"edSelect", {L"Zaznacz i przesuń", L"Select and move"}, Key(0, 'V'), kScopeEditor},
+    {L"edBrush", {L"Pędzel", L"Brush"}, Key(0, 'B'), kScopeEditor},
+    {L"edHighlighter", {L"Zakreślacz", L"Highlighter"}, Key(0, 'H'), kScopeEditor},
+    {L"edEraser", {L"Gumka", L"Eraser"}, Key(0, 'E'), kScopeEditor},
+    {L"edText", {L"Tekst", L"Text"}, Key(0, 'T'), kScopeEditor},
+    {L"edShape", {L"Kształty", L"Shapes"}, Key(0, 'S'), kScopeEditor},
+    {L"edBlur", {L"Zamazywanie", L"Blur"}, Key(0, 'M'), kScopeEditor},
+    {L"edCrop", {L"Kadrowanie", L"Crop"}, Key(0, 'C'), kScopeEditor},
+    {L"edUndo", {L"Cofnij", L"Undo"}, Key(MOD_CONTROL, 'Z'), kScopeEditor},
+    {L"edRedo", {L"Ponów", L"Redo"}, Key(MOD_CONTROL, 'Y'), kScopeEditor},
+    {L"edSave", {L"Zapisz jako nowy", L"Save as new"}, Key(MOD_CONTROL, 'S'), kScopeEditor},
+    {L"edZoomIn", {L"Powiększ", L"Zoom in"}, Key(MOD_CONTROL, VK_OEM_PLUS), kScopeEditor},
+    {L"edZoomOut", {L"Pomniejsz", L"Zoom out"}, Key(MOD_CONTROL, VK_OEM_MINUS), kScopeEditor},
+    {L"edFit", {L"Dopasuj do okna", L"Fit to window"}, Key(MOD_CONTROL, '0'), kScopeEditor},
+    {L"edActual", {L"Rozmiar 100%", L"Actual size"}, Key(MOD_CONTROL, '1'), kScopeEditor},
+    {L"edBold", {L"Pogrubienie tekstu", L"Bold text"}, Key(MOD_CONTROL, 'B'), kScopeEditor},
+    {L"edItalic", {L"Kursywa tekstu", L"Italic text"}, Key(MOD_CONTROL, 'I'), kScopeEditor},
+    {L"edUnderline",
+     {L"Podkreślenie tekstu", L"Underline text"},
+     Key(MOD_CONTROL, 'U'),
+     kScopeEditor},
+    {L"edDelete",
+     {L"Usuń zaznaczony obiekt", L"Delete the selected object"},
+     Key(0, VK_DELETE),
+     kScopeEditor},
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -580,8 +622,8 @@ std::wstring FormatTime(UINT64 fileTime) {
 std::wstring FormatDatePattern(UINT64 fileTime, const wchar_t* pattern) {
     SYSTEMTIME st = LocalTime(fileTime);
     WCHAR buf[64];
-    if (!GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &st, pattern, buf, ARRAYSIZE(buf),
-                         nullptr)) {
+    // Month names in the interface language, not the system one.
+    if (!GetDateFormatEx(Tr(L"pl-PL", L"en-US"), 0, &st, pattern, buf, ARRAYSIZE(buf), nullptr)) {
         return {};
     }
     return buf;
@@ -591,25 +633,27 @@ std::wstring FormatDatePattern(UINT64 fileTime, const wchar_t* pattern) {
 std::wstring FormatDay(UINT64 fileTime) {
     UINT64 day = LocalDay(fileTime), today = LocalDay(NowFileTime());
     if (day == today) {
-        return L"Dzisiaj";
+        return Tr(L"Dzisiaj", L"Today");
     }
     if (day + 1 == today) {
-        return L"Wczoraj";
+        return Tr(L"Wczoraj", L"Yesterday");
     }
     bool thisYear = LocalTime(fileTime).wYear == LocalTime(NowFileTime()).wYear;
-    return FormatDatePattern(fileTime, thisYear ? L"d MMMM" : L"d MMMM yyyy");
+    return FormatDatePattern(
+        fileTime, thisYear ? Tr(L"d MMMM", L"MMMM d") : Tr(L"d MMMM yyyy", L"MMMM d, yyyy"));
 }
 
 // "dziś 09:12", "wczoraj 21:30" or "2 wrz 2026, 10:14".
 std::wstring FormatWhen(UINT64 fileTime) {
     UINT64 day = LocalDay(fileTime), today = LocalDay(NowFileTime());
     if (day == today) {
-        return L"dziś " + FormatTime(fileTime);
+        return Tr(L"dziś ", L"today ") + FormatTime(fileTime);
     }
     if (day + 1 == today) {
-        return L"wczoraj " + FormatTime(fileTime);
+        return Tr(L"wczoraj ", L"yesterday ") + FormatTime(fileTime);
     }
-    return FormatDatePattern(fileTime, L"d MMMM yyyy") + L", " + FormatTime(fileTime);
+    return FormatDatePattern(fileTime, Tr(L"d MMMM yyyy", L"MMMM d, yyyy")) + L", " +
+           FormatTime(fileTime);
 }
 
 // "2 wrz", or the time for today.
@@ -618,7 +662,8 @@ std::wstring FormatShort(UINT64 fileTime) {
         return FormatTime(fileTime);
     }
     bool thisYear = LocalTime(fileTime).wYear == LocalTime(NowFileTime()).wYear;
-    return FormatDatePattern(fileTime, thisYear ? L"d MMM" : L"d MMM yyyy");
+    return FormatDatePattern(fileTime,
+                             thisYear ? Tr(L"d MMM", L"MMM d") : Tr(L"d MMM yyyy", L"MMM d, yyyy"));
 }
 
 // Polish plural: 1 one, 2-4 few (but not 12-14), others many.
@@ -636,10 +681,6 @@ const wchar_t* Plural(size_t n, const wchar_t* one, const wchar_t* few,
 
 std::wstring Count(size_t n, const wchar_t* one, const wchar_t* few, const wchar_t* many) {
     return std::to_wstring(n) + L" " + Plural(n, one, few, many);
-}
-
-const wchar_t* ElementsWord(size_t n) {
-    return Plural(n, L"element", L"elementy", L"elementów");
 }
 
 std::wstring FormatSize(UINT64 bytes) {
@@ -982,7 +1023,7 @@ bool LoadMasterKey() {
 
 // Copies the data files to a dated folder, before an import replaces them.
 void BackupData() {
-    std::wstring dir = g_dataDir + L"\\Kopia " +
+    std::wstring dir = g_dataDir + Tr(L"\\Kopia ", L"\\Backup ") +
                        FormatDatePattern(NowFileTime(), L"yyyy-MM-dd") + L" " +
                        std::to_wstring(NowFileTime() / 10000000 % 100000);
     CreateDirectoryW(dir.c_str(), nullptr);
@@ -1871,7 +1912,7 @@ std::wstring OneLine(const std::wstring& src, size_t max = 300) {
 // Fills the fields that are derived from the content and not saved.
 void FinishItem(Item& it) {
     if (it.imageWidth) {
-        it.preview = L"Obraz · " + std::to_wstring(it.imageWidth) + L" × " +
+        it.preview = Tr(L"Obraz · ", L"Image · ") + std::to_wstring(it.imageWidth) + L" × " +
                      std::to_wstring(it.imageHeight);
         return;
     }
@@ -2100,8 +2141,8 @@ std::wstring TempPngPath(const Item& it) {
     GetTempPathW(ARRAYSIZE(temp), temp);
     std::wstring dir = std::wstring(temp) + L"Clipboard Tweaks";
     CreateDirectoryW(dir.c_str(), nullptr);
-    std::wstring name = L"Obraz " + FormatDatePattern(it.time, L"yyyy-MM-dd") + L" " +
-                        std::to_wstring(it.id) + L".png";
+    std::wstring name = Tr(L"Obraz ", L"Image ") + FormatDatePattern(it.time, L"yyyy-MM-dd") +
+                        L" " + std::to_wstring(it.id) + L".png";
     return dir + L"\\" + name;
 }
 
@@ -2197,13 +2238,13 @@ std::wstring ExpandTemplate(const std::wstring& text) {
             size_t n = wcslen(name);
             return text.compare(i, n, name) == 0 ? n : 0;
         };
-        if (size_t n = field(L"{data}")) {
+        if (size_t n = std::max(field(L"{data}"), field(L"{date}"))) {
             out += date;
             i += n;
-        } else if (size_t n = field(L"{godzina}")) {
+        } else if (size_t n = std::max(field(L"{godzina}"), field(L"{time}"))) {
             out += FormatTime(now);
             i += n;
-        } else if (size_t n = field(L"{schowek}")) {
+        } else if (size_t n = std::max(field(L"{schowek}"), field(L"{clipboard}"))) {
             if (!clipRead && OpenClipboardRetry()) {
                 clip = ClipboardText();
                 CloseClipboard();
@@ -2489,7 +2530,8 @@ void UpdateTrayIcon(DWORD message) {
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = g_trayIcon;
-    wcscpy_s(nid.szTip, g_paused ? L"Clipboard Tweaks: zapisywanie wstrzymane"
+    wcscpy_s(nid.szTip, g_paused ? Tr(L"Clipboard Tweaks: zapisywanie wstrzymane",
+                                      L"Clipboard Tweaks: saving paused")
                                  : L"Clipboard Tweaks");
     Shell_NotifyIconW(message, &nid);
     if (message == NIM_ADD) {
@@ -3214,7 +3256,7 @@ void OpenConfirm(const D2D1_RECT_F& anchor, Hit owner, const std::wstring& quest
                        yes();
                    };
                    Button({r.right - 16 - bw, by, r.right - 16, by + 32}, HIT(0),
-                          L"Anuluj")
+                          Tr(L"Anuluj", L"Cancel"))
                        .click = [] { CloseFlyout(); };
                });
 }
@@ -3240,7 +3282,7 @@ void OpenEmojiPicker(const D2D1_RECT_F& anchor, Hit owner,
             };
         }
         D2D1_RECT_F none{r.left + 8, r.bottom - 8 - 32, r.right - 8, r.bottom - 8};
-        Button(none, HIT(0), L"Bez emoji", kIconCancel, kSubtle).click = [pick] {
+        Button(none, HIT(0), Tr(L"Bez emoji", L"No emoji"), kIconCancel, kSubtle).click = [pick] {
             CloseFlyout();
             pick(L"");
         };
@@ -3337,7 +3379,8 @@ void DrawDialog() {
 
 // The usual button row at the bottom of a dialog; returns its bottom.
 float DialogButtons(const D2D1_RECT_F& body, float y, const std::wstring& ok, bool okEnabled,
-                    std::function<void()> onOk, const std::wstring& cancel = L"Anuluj") {
+                    std::function<void()> onOk,
+                    const std::wstring& cancel = Tr(L"Anuluj", L"Cancel")) {
     float bw = (body.right - body.left - 8) / 2;
     Button({body.left, y, body.left + bw, y + 32}, HIT(0), ok, 0, kAccent, !okEnabled)
         .click = onOk;
@@ -4104,7 +4147,7 @@ std::wstring ItemTitle(const Item& it) {
 
 std::wstring CategoryName(UINT64 id) {
     const Category* c = FindCategory(id);
-    return c ? c->name : L"Bez kategorii";
+    return c ? c->name : Tr(L"Bez kategorii", L"Uncategorized");
 }
 
 bool HasTag(const Item& it, const std::wstring& tag) {
@@ -4386,7 +4429,8 @@ UINT CurrentMods() {
 std::wstring VkName(UINT vk) {
     switch (vk) {
         case VK_RETURN: return L"Enter";
-        case VK_SPACE: return L"Spacja";
+        case VK_SPACE:
+            return Tr(L"Spacja", L"Space");
         case VK_ESCAPE: return L"Esc";
         case VK_DELETE: return L"Del";
         case VK_TAB: return L"Tab";
@@ -4428,7 +4472,7 @@ std::wstring VkName(UINT vk) {
 
 std::wstring KeyName(UINT key) {
     if (!key || (key & kKeyOff)) {
-        return L"Wyłączony";
+        return Tr(L"Wyłączony", L"Off");
     }
     UINT mods = key >> 16;
     std::wstring s;
@@ -4513,14 +4557,14 @@ std::wstring ShortcutConflict(UINT key, int self, UINT64 selfTemplate = 0) {
             sameScope = scope == kScopeEditor;
         }
         if (sameScope && g_keys[j] == key) {
-            return kShortcuts[j].label;
+            return std::wstring(kShortcuts[j].label);
         }
     }
     if (scope == kScopeGlobal) {
         for (const Item& it : g_items) {
             if (it.kind == Kind::Template && Live(it) && it.id != selfTemplate &&
                 it.hotkey == key) {
-                return L"szablon „" + it.name + L"”";
+                return Tr(L"szablon „", L"template “") + it.name + L"”";
             }
         }
     }
@@ -4593,7 +4637,8 @@ void PasteItem(Item& it, PasteMode mode) {
                                                                           : mode);
     }
     if (!ok) {
-        ShowToast(L"Nie udało się wstawić elementu do schowka.");
+        ShowToast(Tr(L"Nie udało się wstawić elementu do schowka.",
+                     L"Couldn't put the item on the clipboard."));
         return;
     }
     it.pasteCount++;
@@ -4677,8 +4722,9 @@ void UnpinItem(UINT64 id) {
         return other.id != id && other.kind == Kind::History && Live(other) &&
                HashKey(other) == hash;
     });
-    ShowToast(L"Odpięto „" + ItemTitle(*FindItem(id)) + L"”. Wrócił na górę historii.",
-              L"Cofnij", [id, category, pinnedTime, time] {
+    ShowToast(Tr(L"Odpięto „", L"Unpinned “") + ItemTitle(*FindItem(id)) +
+                  Tr(L"”. Wrócił na górę historii.", L"”. It's back at the top of the history."),
+              Tr(L"Cofnij", L"Undo"), [id, category, pinnedTime, time] {
                   if (Item* it = FindItem(id)) {
                       it->kind = Kind::Pinned;
                       it->category = category;
@@ -4707,13 +4753,14 @@ void PinItem(UINT64 id, UINT64 category) {
         it->kind = Kind::Pinned;
         it->category = category;
         it->pinnedTime = NowFileTime();
-        ShowToast(L"Przypięto do „" + CategoryName(category) + L"”.", L"Cofnij", [id] {
-            if (Item* it = FindItem(id); it && it->kind == Kind::Pinned) {
-                it->kind = Kind::History;
-                Refresh();
-                SaveIndex();
-            }
-        });
+        ShowToast(Tr(L"Przypięto do „", L"Pinned to “") + CategoryName(category) + L"”.",
+                  Tr(L"Cofnij", L"Undo"), [id] {
+                      if (Item* it = FindItem(id); it && it->kind == Kind::Pinned) {
+                          it->kind = Kind::History;
+                          Refresh();
+                          SaveIndex();
+                      }
+                  });
     }
     g_settings[L"lastCategory"] = (INT64)category;
     SaveSettings();
@@ -4734,10 +4781,11 @@ void RestoreItem(UINT64 id, bool announce) {
         RegisterTemplateHotkeys();
     }
     if (announce) {
-        const wchar_t* where = it->kind == Kind::Pinned     ? L"przypiętych"
-                               : it->kind == Kind::Template ? L"szablonów"
-                                                            : L"historii";
-        ShowToast(L"Przywrócono „" + ItemTitle(*it) + L"” do " + where + L".");
+        const wchar_t* where = it->kind == Kind::Pinned     ? Tr(L"przypiętych", L"Pinned")
+                               : it->kind == Kind::Template ? Tr(L"szablonów", L"Templates")
+                                                            : Tr(L"historii", L"History");
+        ShowToast(Tr(L"Przywrócono „", L"Restored “") + ItemTitle(*it) + Tr(L"” do ", L"” to ") +
+                  where + L".");
     }
     Refresh();
     SaveIndex();
@@ -4755,8 +4803,9 @@ void TrashItem(UINT64 id) {
     if (g_detailsId == id) {
         CloseDetails();
     }
-    ShowToast(L"„" + ItemTitle(*it) + L"” jest w koszu przez 30 dni.", L"Cofnij",
-              [id] { RestoreItem(id, false); });
+    ShowToast(Tr(L"„", L"“") + ItemTitle(*it) +
+                  Tr(L"” jest w koszu przez 30 dni.", L"” is in the trash for 30 days."),
+              Tr(L"Cofnij", L"Undo"), [id] { RestoreItem(id, false); });
     Refresh();
     SaveIndex();
 }
@@ -4769,7 +4818,7 @@ void PurgeItem(UINT64 id) {
 
 void EmptyTrash() {
     PurgeItems([](const Item& it) { return !Live(it); });
-    ShowToast(L"Kosz jest pusty.");
+    ShowToast(Tr(L"Kosz jest pusty.", L"The trash is empty."));
     Refresh();
     SaveIndex();
 }
@@ -4815,9 +4864,12 @@ void ClearHistory() {
         return;
     }
     size_t n = g_cleared.size();
-    ShowToast(L"Wyczyszczono " + Count(n, L"element", L"elementy", L"elementów") +
-                  L" historii. Przypięte i szablony bez zmian.",
-              L"Cofnij", UndoClear, CommitClear);
+    ShowToast(Tr(L"Wyczyszczono ", L"Cleared ") +
+                  Count(n, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+                        Tr(L"elementów", L"items")) +
+                  Tr(L" historii. Przypięte i szablony bez zmian.",
+                     L" from the history. Pinned items and templates are unchanged."),
+              Tr(L"Cofnij", L"Undo"), UndoClear, CommitClear);
     Refresh();
     SaveIndex();
 }
@@ -4889,7 +4941,9 @@ void DeleteCategory(UINT64 id) {
     if (g_pinFilter == id) {
         g_pinFilter = kAllCategories;
     }
-    ShowToast(L"Usunięto kategorię „" + name + L"”. Jej elementy są w „Bez kategorii”.");
+    ShowToast(
+        Tr(L"Usunięto kategorię „", L"Deleted the category “") + name +
+        Tr(L"”. Jej elementy są w „Bez kategorii”.", L"”. Its items are in “Uncategorized”."));
     Refresh();
     SaveIndex();
 }
@@ -5179,13 +5233,14 @@ void SaveItemAs(UINT64 id) {
         return;
     }
     bool image = it->imageWidth != 0;
-    std::wstring name = (image ? L"Obraz " : L"Tekst ") +
+    std::wstring name = (image ? Tr(L"Obraz ", L"Image ") : Tr(L"Tekst ", L"Text ")) +
                         FormatDatePattern(it->time, L"yyyy-MM-dd") + (image ? L".png" : L".txt");
-    COMDLG_FILTERSPEC png[] = {{L"Obraz PNG", L"*.png"}};
-    COMDLG_FILTERSPEC txt[] = {{L"Plik tekstowy", L"*.txt"}, {L"Wszystkie pliki", L"*.*"}};
+    COMDLG_FILTERSPEC png[] = {{Tr(L"Obraz PNG", L"PNG image"), L"*.png"}};
+    COMDLG_FILTERSPEC txt[] = {{Tr(L"Plik tekstowy", L"Text file"), L"*.txt"},
+                               {Tr(L"Wszystkie pliki", L"All files"), L"*.*"}};
     std::wstring path;
-    if (!FileDialog<IFileSaveDialog>(CLSID_FileSaveDialog, L"Zapisz jako", name.c_str(),
-                                     image ? png : txt, image ? 1 : 2,
+    if (!FileDialog<IFileSaveDialog>(CLSID_FileSaveDialog, Tr(L"Zapisz jako", L"Save as"),
+                                     name.c_str(), image ? png : txt, image ? 1 : 2,
                                      image ? L"png" : L"txt", &path)) {
         return;
     }
@@ -5198,14 +5253,15 @@ void SaveItemAs(UINT64 id) {
             std::string data;
             bool ok = LoadImagePng(id, &data) && WriteWholeFile(path, data);
             PostUi([ok, path] {
-                ShowToast(ok ? L"Zapisano „" + FileName(path) + L"”."
-                             : L"Nie udało się zapisać pliku.");
+                ShowToast(ok ? Tr(L"Zapisano „", L"Saved “") + FileName(path) + L"”."
+                             : Tr(L"Nie udało się zapisać pliku.", L"Couldn't save the file."));
             });
         });
     } else {
         std::string data = "\xEF\xBB\xBF" + ToUtf8(it->text);
         bool ok = WriteWholeFile(path, data);
-        ShowToast(ok ? L"Zapisano „" + FileName(path) + L"”." : L"Nie udało się zapisać pliku.");
+        ShowToast(ok ? Tr(L"Zapisano „", L"Saved “") + FileName(path) + L"”."
+                     : Tr(L"Nie udało się zapisać pliku.", L"Couldn't save the file."));
     }
 }
 
@@ -5512,35 +5568,41 @@ std::wstring ImportSummary(const ImportData& d) {
     }
     std::vector<std::wstring> parts;
     if (pinned) {
-        parts.push_back(Count(pinned, L"przypięty", L"przypięte", L"przypiętych") +
-                        (images ? L" (z obrazami w oryginale)" : L""));
+        parts.push_back(
+            Count(pinned, Tr(L"przypięty", L"pinned item"), Tr(L"przypięte", L"pinned items"),
+                  Tr(L"przypiętych", L"pinned items")) +
+            (images ? Tr(L" (z obrazami w oryginale)", L" (with original images)") : L""));
     }
     if (!d.categories.empty()) {
-        parts.push_back(Count(d.categories.size(), L"kategoria", L"kategorie", L"kategorii"));
+        parts.push_back(Count(d.categories.size(), Tr(L"kategoria", L"category"),
+                              Tr(L"kategorie", L"categories"), Tr(L"kategorii", L"categories")));
     }
     if (!tags.empty()) {
-        parts.push_back(Count(tags.size(), L"tag", L"tagi", L"tagów"));
+        parts.push_back(
+            Count(tags.size(), Tr(L"tag", L"tag"), Tr(L"tagi", L"tags"), Tr(L"tagów", L"tags")));
     }
     if (templates) {
-        parts.push_back(Count(templates, L"szablon", L"szablony", L"szablonów"));
+        parts.push_back(Count(templates, Tr(L"szablon", L"template"), Tr(L"szablony", L"templates"),
+                              Tr(L"szablonów", L"templates")));
     }
     if (history) {
-        parts.push_back(Count(history, L"element historii", L"elementy historii",
-                              L"elementów historii"));
+        parts.push_back(Count(history, Tr(L"element historii", L"history item"),
+                              Tr(L"elementy historii", L"history items"),
+                              Tr(L"elementów historii", L"history items")));
     }
     if (!d.settings.empty()) {
-        parts.push_back(L"ustawienia");
+        parts.push_back(Tr(L"ustawienia", L"settings"));
     }
     if (parts.empty()) {
-        return L"Plik jest pusty.";
+        return Tr(L"Plik jest pusty.", L"The file is empty.");
     }
-    std::wstring s = L"W pliku: ";
+    std::wstring s = Tr(L"W pliku: ", L"In the file: ");
     for (size_t i = 0; i < parts.size(); i++) {
         s += parts[i];
         if (i + 2 < parts.size()) {
             s += L", ";
         } else if (i + 2 == parts.size()) {
-            s += L" i ";
+            s += Tr(L" i ", L" and ");
         }
     }
     return s + L".";
@@ -5616,12 +5678,17 @@ void ApplyImport() {
         RegisterTemplateHotkeys();
         Refresh();
         SaveIndex();
-        std::wstring message = L"Zaimportowano " + Count(added, L"element", L"elementy", L"elementów");
+        std::wstring message = Tr(L"Zaimportowano ", L"Imported ") +
+                               Count(added, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+                                     Tr(L"elementów", L"items"));
         if (skipped) {
-            message += L", pominięto " + Count(skipped, L"duplikat", L"duplikaty", L"duplikatów");
+            message += Tr(L", pominięto ", L", skipped ") +
+                       Count(skipped, Tr(L"duplikat", L"duplicate"),
+                             Tr(L"duplikaty", L"duplicates"), Tr(L"duplikatów", L"duplicates"));
         }
         if (replace) {
-            message += L". Poprzednie dane są w kopii w folderze danych";
+            message += Tr(L". Poprzednie dane są w kopii w folderze danych",
+                          L". A backup of the previous data is in the data folder");
         }
         ShowToast(message + L".");
     };
@@ -5667,22 +5734,24 @@ void EmptyMessage(const std::wstring& message, const D2D1_RECT_F& area) {
 std::wstring TypeLabel(const Item& it) {
     switch (it.type) {
         case ItemType::Image:
-            return L"Obraz · PNG";
+            return Tr(L"Obraz · PNG", L"Image · PNG");
         case ItemType::Files:
-            return std::count(it.files.begin(), it.files.end(), L'\n') ? L"Pliki" : L"Plik";
+            return std::count(it.files.begin(), it.files.end(), L'\n') ? Tr(L"Pliki", L"Files")
+                                                                       : Tr(L"Plik", L"File");
         case ItemType::Link:
             return L"Link";
         case ItemType::Code:
-            return L"Kod";
+            return Tr(L"Kod", L"Code");
         case ItemType::Color:
-            return L"Kolor";
+            return Tr(L"Kolor", L"Color");
         case ItemType::Text:
             break;
     }
     if (it.kind == Kind::Template) {
-        return L"Szablon";
+        return Tr(L"Szablon", L"Template");
     }
-    return it.html.empty() && it.rtf.empty() ? L"Tekst" : L"Tekst z formatowaniem";
+    return it.html.empty() && it.rtf.empty() ? Tr(L"Tekst", L"Text")
+                                             : Tr(L"Tekst z formatowaniem", L"Formatted text");
 }
 
 wchar_t TypeGlyph(const Item& it) {
@@ -5766,7 +5835,8 @@ void DrawTemplateText(const std::wstring& text, const D2D1_RECT_F& r, D2D1_COLOR
     }
     ID2D1SolidColorBrush* accent = nullptr;
     g_rt->CreateSolidColorBrush(g_theme.accentText, &accent);
-    for (const wchar_t* field : {L"{data}", L"{godzina}", L"{schowek}"}) {
+    for (const wchar_t* field :
+         {L"{data}", L"{godzina}", L"{schowek}", L"{date}", L"{time}", L"{clipboard}"}) {
         size_t n = wcslen(field);
         for (size_t pos = line.find(field); pos != std::wstring::npos;
              pos = line.find(field, pos + n)) {
@@ -5809,10 +5879,10 @@ void OpenPinMenu(const D2D1_RECT_F& anchor, Hit owner, UINT64 id) {
     for (const Category& c : g_categories) {
         add(c.id, c.name, c.emoji, kIconFolder);
     }
-    add(0, L"Bez kategorii", L"", kIconNoCategory);
+    add(0, Tr(L"Bez kategorii", L"Uncategorized"), L"", kIconNoCategory);
     items.push_back({.separator = true});
     MenuItem create;
-    create.label = L"Nowa kategoria…";
+    create.label = Tr(L"Nowa kategoria…", L"New category…");
     create.glyph = kIconAdd;
     create.action = [id] {
         ShowCategoryDialog(0, [id](UINT64 category) { PinItem(id, category); });
@@ -5827,8 +5897,10 @@ void ConfirmDeleteTemplate(const D2D1_RECT_F& anchor, Hit owner, UINT64 id) {
     if (!it || ToggleFlyout(owner)) {
         return;
     }
-    OpenConfirm(anchor, owner, L"Usunąć szablon „" + it->name + L"”? Trafi do kosza.",
-                L"Usuń", [id] { TrashItem(id); });
+    OpenConfirm(anchor, owner,
+                Tr(L"Usunąć szablon „", L"Delete the template “") + it->name +
+                    Tr(L"”? Trafi do kosza.", L"”? It goes to the trash."),
+                Tr(L"Usuń", L"Delete"), [id] { TrashItem(id); });
 }
 
 bool CanEditText(const Item& it) {
@@ -5867,36 +5939,47 @@ void OpenItemMenu(const D2D1_RECT_F& anchor, UINT64 id) {
         m.action = std::move(action);
         items.push_back(std::move(m));
     };
-    add(L"Wklej", kIconPaste, [id] { PasteId(id, PasteMode::Normal); }, KeyName(g_keys[ScPaste]));
+    add(
+        Tr(L"Wklej", L"Paste"), kIconPaste, [id] { PasteId(id, PasteMode::Normal); },
+        KeyName(g_keys[ScPaste]));
     if (!it->imageWidth && it->kind != Kind::Template) {
-        add(L"Wklej jako zwykły tekst", kIconText, [id] { PasteId(id, PasteMode::Plain); },
-            KeyName(g_keys[ScPastePlain]));
+        add(
+            Tr(L"Wklej jako zwykły tekst", L"Paste as plain text"), kIconText,
+            [id] { PasteId(id, PasteMode::Plain); }, KeyName(g_keys[ScPastePlain]));
     }
     items.push_back({.separator = true});
-    add(L"Szczegóły", kIconPane, [id] { OpenDetails(id); }, KeyName(g_keys[ScDetails]));
+    add(
+        Tr(L"Szczegóły", L"Details"), kIconPane, [id] { OpenDetails(id); },
+        KeyName(g_keys[ScDetails]));
     if (it->kind == Kind::History) {
-        add(L"Przypnij…", kIconPin, [anchor, owner, id] { OpenPinMenu(anchor, owner, id); },
-            KeyName(g_keys[ScPin]));
-    } else if (it->kind == Kind::Pinned) {
-        add(L"Zmień kategorię…", kIconFolder,
+        add(
+            Tr(L"Przypnij…", L"Pin…"), kIconPin,
             [anchor, owner, id] { OpenPinMenu(anchor, owner, id); }, KeyName(g_keys[ScPin]));
-        add(L"Odepnij", kIconUnpin, [id] { UnpinItem(id); });
+    } else if (it->kind == Kind::Pinned) {
+        add(
+            Tr(L"Zmień kategorię…", L"Change category…"), kIconFolder,
+            [anchor, owner, id] { OpenPinMenu(anchor, owner, id); }, KeyName(g_keys[ScPin]));
+        add(Tr(L"Odepnij", L"Unpin"), kIconUnpin, [id] { UnpinItem(id); });
     }
     if (it->imageWidth || CanEditText(*it) || it->kind == Kind::Template) {
-        add(L"Edytuj", kIconEdit, [id] { EditItem(id); }, KeyName(g_keys[ScEdit]));
+        add(Tr(L"Edytuj", L"Edit"), kIconEdit, [id] { EditItem(id); }, KeyName(g_keys[ScEdit]));
     }
     if (it->imageWidth || !it->text.empty()) {
-        add(L"Zapisz jako…", kIconSave, [id] { SaveItemAs(id); });
+        add(Tr(L"Zapisz jako…", L"Save as…"), kIconSave, [id] { SaveItemAs(id); });
     }
     if (CanOpen(*it)) {
-        add(L"Otwórz", kIconOpen, [id] { OpenItem(id); });
+        add(Tr(L"Otwórz", L"Open"), kIconOpen, [id] { OpenItem(id); });
     }
     items.push_back({.separator = true});
     if (it->kind == Kind::Template) {
-        add(L"Usuń", kIconDelete, [anchor, owner, id] { ConfirmDeleteTemplate(anchor, owner, id); },
+        add(
+            Tr(L"Usuń", L"Delete"), kIconDelete,
+            [anchor, owner, id] { ConfirmDeleteTemplate(anchor, owner, id); },
             KeyName(g_keys[ScDelete]), true);
     } else {
-        add(L"Usuń", kIconDelete, [id] { TrashItem(id); }, KeyName(g_keys[ScDelete]), true);
+        add(
+            Tr(L"Usuń", L"Delete"), kIconDelete, [id] { TrashItem(id); }, KeyName(g_keys[ScDelete]),
+            true);
     }
     OpenMenu(anchor, owner, std::move(items), 240);
 }
@@ -5938,39 +6021,44 @@ float HoverButtons(const D2D1_RECT_F& r, const Item& it, bool trash = false) {
                           g_fonts.icon14);
     };
     if (trash) {
-        button(HIT(id), kIconDelete, L"Usuń na stałe").click = [id] { PurgeItem(id); };
-        button(HIT(id), kIconRestore, L"Przywróć").click = [id] { RestoreItem(id, true); };
+        button(HIT(id), kIconDelete, Tr(L"Usuń na stałe", L"Delete permanently")).click = [id] {
+            PurgeItem(id);
+        };
+        button(HIT(id), kIconRestore, Tr(L"Przywróć", L"Restore")).click = [id] {
+            RestoreItem(id, true);
+        };
         return x;
     }
     if (it.kind == Kind::Template) {
         Hit del = HIT(id);
         D2D1_RECT_F anchor{x - 32, cy - 16, x, cy + 16};
-        button(del, kIconDelete, L"Usuń").click = [anchor, del, id] {
+        button(del, kIconDelete, Tr(L"Usuń", L"Delete")).click = [anchor, del, id] {
             ConfirmDeleteTemplate(anchor, del, id);
         };
-        button(HIT(id), kIconEdit, L"Edytuj").click = [id] { ShowTemplateDialog(id); };
+        button(HIT(id), kIconEdit, Tr(L"Edytuj", L"Edit")).click = [id] { ShowTemplateDialog(id); };
         return x;
     }
-    button(HIT(id), kIconDelete, L"Usuń do kosza").click = [id] { TrashItem(id); };
+    button(HIT(id), kIconDelete, Tr(L"Usuń do kosza", L"Move to trash")).click = [id] {
+        TrashItem(id);
+    };
     if (it.kind == Kind::Pinned) {
-        button(HIT(id), kIconUnpin, L"Odepnij").click = [id] { UnpinItem(id); };
+        button(HIT(id), kIconUnpin, Tr(L"Odepnij", L"Unpin")).click = [id] { UnpinItem(id); };
     }
-    button(HIT(id), kIconPane, L"Szczegóły").click = [id] {
+    button(HIT(id), kIconPane, Tr(L"Szczegóły", L"Details")).click = [id] {
         g_detailsId == id ? CloseDetails() : OpenDetails(id);
     };
     if (it.kind == Kind::History) {
         Hit pin = HIT(id);
         D2D1_RECT_F anchor{x - 32, cy - 16, x, cy + 16};
-        button(pin, kIconPin, L"Przypnij").click = [anchor, pin, id] {
+        button(pin, kIconPin, Tr(L"Przypnij", L"Pin")).click = [anchor, pin, id] {
             OpenPinMenu(anchor, pin, id);
         };
     }
     if (it.imageWidth) {
-        float w = ButtonWidth(L"Edytuj", kIconEdit) - 4;
+        float w = ButtonWidth(Tr(L"Edytuj", L"Edit"), kIconEdit) - 4;
         x -= w + 4;
-        Button({x, cy - 14, x + w, cy + 14}, HIT(id), L"Edytuj", kIconEdit).click = [id] {
-            OpenEditor(id, false);
-        };
+        Button({x, cy - 14, x + w, cy + 14}, HIT(id), Tr(L"Edytuj", L"Edit"), kIconEdit).click =
+            [id] { OpenEditor(id, false); };
     }
     return x;
 }
@@ -6022,10 +6110,13 @@ void DrawList(const D2D1_RECT_F& area, const std::function<void(const Row&, D2D1
 
 void DrawHistory(const D2D1_RECT_F& area) {
     if (g_rows.empty()) {
-        EmptyMessage(!g_loaded            ? L"Wczytywanie historii…"
-                     : !g_query.empty()   ? L"Brak wyników. Spróbuj innych słów."
-                     : g_paused           ? L"Zapisywanie jest wstrzymane. Wznowisz je w menu „…”."
-                                          : L"Historia jest pusta. Skopiuj coś, a pojawi się tutaj.",
+        EmptyMessage(!g_loaded          ? Tr(L"Wczytywanie historii…", L"Loading the history…")
+                     : !g_query.empty() ? Tr(L"Brak wyników. Spróbuj innych słów.",
+                                             L"No results. Try other words.")
+                     : g_paused ? Tr(L"Zapisywanie jest wstrzymane. Wznowisz je w menu „…”.",
+                                     L"Saving is paused. You can resume it in the “…” menu.")
+                                : Tr(L"Historia jest pusta. Skopiuj coś, a pojawi się tutaj.",
+                                     L"The history is empty. Copy something and it shows up here."),
                      area);
         return;
     }
@@ -6083,12 +6174,12 @@ void CategoryMenu(const D2D1_RECT_F& anchor, Hit owner, UINT64 id) {
     }
     std::vector<MenuItem> items;
     MenuItem edit;
-    edit.label = L"Edytuj kategorię…";
+    edit.label = Tr(L"Edytuj kategorię…", L"Edit category…");
     edit.glyph = kIconEdit;
     edit.action = [id] { ShowCategoryDialog(id, nullptr); };
     items.push_back(edit);
     MenuItem del;
-    del.label = L"Usuń kategorię";
+    del.label = Tr(L"Usuń kategorię", L"Delete category");
     del.glyph = kIconDelete;
     del.danger = true;
     del.action = [anchor, owner, id] {
@@ -6097,9 +6188,10 @@ void CategoryMenu(const D2D1_RECT_F& anchor, Hit owner, UINT64 id) {
             return;
         }
         OpenConfirm(anchor, owner,
-                    L"Usunąć kategorię „" + c->name +
-                        L"”? Jej elementy zostaną w przypiętych, w „Bez kategorii”.",
-                    L"Usuń", [id] { DeleteCategory(id); });
+                    Tr(L"Usunąć kategorię „", L"Delete the category “") + c->name +
+                        Tr(L"”? Jej elementy zostaną w przypiętych, w „Bez kategorii”.",
+                           L"”? Its items stay pinned, in “Uncategorized”."),
+                    Tr(L"Usuń", L"Delete"), [id] { DeleteCategory(id); });
     };
     items.push_back(del);
     OpenMenu(anchor, owner, std::move(items));
@@ -6180,18 +6272,18 @@ void DrawCategoryColumn(const D2D1_RECT_F& area) {
         }
         y += 38;
     };
-    entry(kAllCategories, L"Wszystkie");
+    entry(kAllCategories, Tr(L"Wszystkie", L"All"));
     for (const Category& c : g_categories) {
         entry(c.id, c.name);
     }
-    entry(0, L"Bez kategorii");
+    entry(0, Tr(L"Bez kategorii", L"Uncategorized"));
     D2D1_RECT_F add{area.left + 4, y + 2, area.right - 6, y + 34};
     Hit addHit = HIT(0);
     Fill(add, SubtleFill(addHit), 4);
     Stroke(add, t.strong, 4, 1, DashStyle());
     Glyph(kIconAdd, g_fonts.icon12, {add.left + 10, add.top, add.left + 26, add.bottom}, t.text2);
-    Text(L"Nowa kategoria", g_fonts.small, {add.left + 34, add.top, add.right - 4, add.bottom},
-         t.text2);
+    Text(Tr(L"Nowa kategoria", L"New category"), g_fonts.small,
+         {add.left + 34, add.top, add.right - 4, add.bottom}, t.text2);
     Add(add, addHit).click = [] {
         ShowCategoryDialog(0, [](UINT64 id) {
             g_pinFilter = id;
@@ -6200,7 +6292,7 @@ void DrawCategoryColumn(const D2D1_RECT_F& area) {
     };
     y += 48;
     if (!g_tagCounts.empty()) {
-        Text(L"Tagi", g_fonts.header, {area.left + 8, y, area.right, y + 20}, t.text2);
+        Text(Tr(L"Tagi", L"Tags"), g_fonts.header, {area.left + 8, y, area.right, y + 20}, t.text2);
         y = DrawTagChips(area.left + 8, y + 26, area.right - 8) + 8;
     }
     EndScroll(g_catScroll, area, y - top + g_catScroll.pos + 8);
@@ -6217,7 +6309,9 @@ void DrawPinnedHeader(const D2D1_RECT_F& r) {
     Fill(tile, c && c->color ? CategoryColor(c->color, 0.22f) : t.control, 6);
     Stroke(tile, t.controlStroke, 6);
     DrawCategoryIcon(id, Inset(tile, 8, 8));
-    std::wstring name = id == kAllCategories ? L"Wszystkie" : c ? c->name : L"Bez kategorii";
+    std::wstring name = id == kAllCategories ? Tr(L"Wszystkie", L"All")
+                        : c                  ? c->name
+                                             : Tr(L"Bez kategorii", L"Uncategorized");
     if (!g_tagFilter.empty()) {
         name += L" · #" + g_tagFilter;
     }
@@ -6225,15 +6319,16 @@ void DrawPinnedHeader(const D2D1_RECT_F& r) {
     if (c) {
         Hit h = HIT(id);
         D2D1_RECT_F b{r.right - 40, r.top + 8, r.right - 8, r.top + 40};
-        IconButton(b, h, kIconEdit, L"Edytuj kategorię").click = [id] {
+        IconButton(b, h, kIconEdit, Tr(L"Edytuj kategorię", L"Edit category")).click = [id] {
             ShowCategoryDialog(id, nullptr);
         };
         right = b.left - 4;
     }
     Text(name, g_fonts.subtitle, {r.left + 54, r.top + 6, right, r.top + 26}, t.text);
     size_t count = EntryCount();
-    Text(Count(count, L"element", L"elementy", L"elementów"), g_fonts.small,
-         {r.left + 54, r.top + 25, right, r.top + 42}, t.text2);
+    Text(Count(count, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+               Tr(L"elementów", L"items")),
+         g_fonts.small, {r.left + 54, r.top + 25, right, r.top + 42}, t.text2);
 }
 
 void DrawSectionRow(const Row& row, const D2D1_RECT_F& r) {
@@ -6248,7 +6343,7 @@ void DrawSectionRow(const Row& row, const D2D1_RECT_F& r) {
     Glyph(collapsed ? kIconChevronRight : kIconChevronDown, g_fonts.icon10,
           {r.left + 6, r.top, r.left + 22, r.bottom}, t.text2);
     DrawCategoryIcon(id, {r.left + 28, r.top + 12, r.left + 44, r.bottom - 12});
-    std::wstring name = c ? c->name : L"Bez kategorii";
+    std::wstring name = c ? c->name : Tr(L"Bez kategorii", L"Uncategorized");
     float nameWidth = std::min(TextWidth(name, g_fonts.rowBold), r.right - r.left - 160);
     Text(name, g_fonts.rowBold, {r.left + 52, r.top, r.left + 52 + nameWidth, r.bottom}, t.text);
     float x = r.left + 52 + nameWidth + 8;
@@ -6271,7 +6366,7 @@ void DrawSectionRow(const Row& row, const D2D1_RECT_F& r) {
         region.rclick = [r, h, id] { CategoryMenu(r, h, id); };
         if (MouseOver(r)) {
             IconButton({r.right - 36, r.top + 4, r.right - 4, r.bottom - 4}, HIT(id), kIconEdit,
-                       L"Edytuj kategorię", t.text, g_fonts.icon14)
+                       Tr(L"Edytuj kategorię", L"Edit category"), t.text, g_fonts.icon14)
                 .click = [id] { ShowCategoryDialog(id, nullptr); };
         }
     }
@@ -6286,7 +6381,8 @@ void DrawPinned(const D2D1_RECT_F& area) {
             list.top = bottom + 6;
         }
         if (g_rows.empty()) {
-            EmptyMessage(L"Brak wyników. Spróbuj innych słów.", list);
+            EmptyMessage(Tr(L"Brak wyników. Spróbuj innych słów.", L"No results. Try other words."),
+                         list);
             return;
         }
         DrawList(list, [](const Row& row, D2D1_RECT_F r) {
@@ -6300,7 +6396,7 @@ void DrawPinned(const D2D1_RECT_F& area) {
                 Stroke(add, t.strong, 4, 1, DashStyle());
                 Glyph(kIconAdd, g_fonts.icon12, {add.left + 12, add.top, add.left + 28, add.bottom},
                       t.text2);
-                Text(L"Nowa kategoria", g_fonts.small,
+                Text(Tr(L"Nowa kategoria", L"New category"), g_fonts.small,
                      {add.left + 36, add.top, add.right, add.bottom}, t.text2);
                 Add(add, h).click = [] { ShowCategoryDialog(0, nullptr); };
             } else if (const Item* it = FindItem(row.id)) {
@@ -6317,11 +6413,16 @@ void DrawPinned(const D2D1_RECT_F& area) {
     D2D1_RECT_F list{right.left, right.top + 48, right.right, right.bottom};
     if (g_rows.empty()) {
         bool none = CountItems(Kind::Pinned) == 0;
-        EmptyMessage(none ? L"Nic tu jeszcze nie ma. W historii najedź na element i kliknij "
-                            L"pinezkę albo naciśnij " + KeyName(g_keys[ScPin]) + L"."
-                     : !g_query.empty() ? L"Brak wyników. Spróbuj innych słów."
-                                        : L"W tej kategorii nie ma elementów.",
-                     list);
+        EmptyMessage(
+            none ? Tr(L"Nic tu jeszcze nie ma. W historii najedź na element i kliknij "
+                      L"pinezkę albo naciśnij ",
+                      L"Nothing here yet. In the history, hover over an item and click the pin, or "
+                      L"press ") +
+                       KeyName(g_keys[ScPin]) + L"."
+            : !g_query.empty()
+                ? Tr(L"Brak wyników. Spróbuj innych słów.", L"No results. Try other words.")
+                : Tr(L"W tej kategorii nie ma elementów.", L"This category has no items."),
+            list);
         return;
     }
     DrawList(list, [](const Row& row, D2D1_RECT_F r) {
@@ -6359,7 +6460,8 @@ void DrawTemplateEntry(const Item& it, const D2D1_RECT_F& r) {
         if (g_hotkeyFailed.contains(it.id)) {
             D2D1_RECT_F warn{right - 20, cy - 10, right, cy + 10};
             Glyph(kIconWarning, g_fonts.icon14, warn, t.warning);
-            Add(warn, HIT(it.id)).tip = L"Ten skrót zajął już inny program";
+            Add(warn, HIT(it.id)).tip =
+                Tr(L"Ten skrót zajął już inny program", L"Another app already uses this shortcut");
             right -= 24;
         }
     }
@@ -6370,18 +6472,20 @@ void DrawTemplateEntry(const Item& it, const D2D1_RECT_F& r) {
 void DrawTemplates(const D2D1_RECT_F& area) {
     const Theme& t = g_theme;
     D2D1_RECT_F head{area.left + 8, area.top + 4, area.right - 8, area.top + 44};
-    float bw = ButtonWidth(L"Nowy szablon", kIconAdd);
-    Button({head.right - bw, head.top + 4, head.right, head.bottom - 4}, HIT(0), L"Nowy szablon",
-           kIconAdd, kAccent)
+    float bw = ButtonWidth(Tr(L"Nowy szablon", L"New template"), kIconAdd);
+    Button({head.right - bw, head.top + 4, head.right, head.bottom - 4}, HIT(0),
+           Tr(L"Nowy szablon", L"New template"), kIconAdd, kAccent)
         .click = [] { ShowTemplateDialog(0); };
     float x = head.left + 4;
-    float labelWidth = TextWidth(L"Pola wypełniane przy wklejaniu:", g_fonts.small);
+    float labelWidth = TextWidth(
+        Tr(L"Pola wypełniane przy wklejaniu:", L"Fields filled in when pasting:"), g_fonts.small);
     if (x + labelWidth + 220 < head.right - bw - 8) {
-        Text(L"Pola wypełniane przy wklejaniu:", g_fonts.small,
-             {x, head.top, x + labelWidth + 1, head.bottom}, t.text2);
+        Text(Tr(L"Pola wypełniane przy wklejaniu:", L"Fields filled in when pasting:"),
+             g_fonts.small, {x, head.top, x + labelWidth + 1, head.bottom}, t.text2);
         x += labelWidth + 8;
     }
-    for (const wchar_t* field : {L"{data}", L"{godzina}", L"{schowek}"}) {
+    for (int i = 0; i < 3; i++) {
+        const wchar_t* field = kTemplateFields[i];
         float w = ChipWidth(field);
         if (x + w > head.right - bw - 8) {
             break;
@@ -6391,19 +6495,23 @@ void DrawTemplates(const D2D1_RECT_F& area) {
         Stroke(chip, t.controlStroke, 12);
         Text(field, g_fonts.small, {chip.left + 10, chip.top, chip.right, chip.bottom},
              t.accentText);
-        Add(chip, HIT(field[1])).tip = field[1] == L'd'   ? L"Dzisiejsza data"
-                                       : field[1] == L'g' ? L"Bieżąca godzina"
-                                                          : L"To, co jest teraz w schowku";
+        Add(chip, HIT(i)).tip =
+            i == 0   ? Tr(L"Dzisiejsza data", L"Today's date")
+            : i == 1 ? Tr(L"Bieżąca godzina", L"Current time")
+                     : Tr(L"To, co jest teraz w schowku", L"What's on the clipboard now");
         x += w + 6;
     }
     D2D1_RECT_F list{area.left, head.bottom + 4, area.right, area.bottom};
     Fill({area.left + 8, head.bottom + 2, area.right - 8, head.bottom + 3}, t.divider);
     if (g_rows.empty()) {
-        EmptyMessage(CountItems(Kind::Template)
-                         ? L"Brak wyników. Spróbuj innych słów."
-                         : L"Brak szablonów. Kliknij „Nowy szablon”, żeby zapisać gotowy tekst "
-                           L"z polami {data}, {godzina} i {schowek}.",
-                     list);
+        EmptyMessage(
+            CountItems(Kind::Template)
+                ? Tr(L"Brak wyników. Spróbuj innych słów.", L"No results. Try other words.")
+                : Tr(L"Brak szablonów. Kliknij „Nowy szablon”, żeby zapisać gotowy tekst "
+                     L"z polami {data}, {godzina} i {schowek}.",
+                     L"No templates yet. Click “New template” to save a ready text with the fields "
+                     L"{date}, {time} and {clipboard}."),
+            list);
         return;
     }
     DrawList(list, [](const Row& row, D2D1_RECT_F r) {
@@ -6423,38 +6531,50 @@ struct InfoRow {
 std::vector<InfoRow> ItemInfo(const Item& it) {
     std::vector<InfoRow> rows;
     if (it.imageWidth) {
-        rows.push_back({L"Rozdzielczość", std::to_wstring(it.imageWidth) + L" × " +
-                                              std::to_wstring(it.imageHeight) + L" px"});
-        rows.push_back({L"Plik", L"PNG bez kompresji stratnej · " + FormatSize(ImageFileSize(it.id))});
+        rows.push_back(
+            {Tr(L"Rozdzielczość", L"Resolution"),
+             std::to_wstring(it.imageWidth) + L" × " + std::to_wstring(it.imageHeight) + L" px"});
+        rows.push_back(
+            {Tr(L"Plik", L"File"), Tr(L"PNG bez kompresji stratnej · ", L"PNG, lossless · ") +
+                                       FormatSize(ImageFileSize(it.id))});
     } else if (!it.files.empty()) {
         size_t n = std::count(it.files.begin(), it.files.end(), L'\n') + 1;
-        rows.push_back({L"Pliki", Count(n, L"ścieżka", L"ścieżki", L"ścieżek")});
+        rows.push_back(
+            {Tr(L"Pliki", L"Files"), Count(n, Tr(L"ścieżka", L"path"), Tr(L"ścieżki", L"paths"),
+                                           Tr(L"ścieżek", L"paths"))});
     } else {
         size_t lines = std::count(it.text.begin(), it.text.end(), L'\n') + 1;
-        rows.push_back({L"Długość", Count(it.text.size(), L"znak", L"znaki", L"znaków") + L", " +
-                                        Count(lines, L"wiersz", L"wiersze", L"wierszy")});
+        rows.push_back({Tr(L"Długość", L"Length"),
+                        Count(it.text.size(), Tr(L"znak", L"character"),
+                              Tr(L"znaki", L"characters"), Tr(L"znaków", L"characters")) +
+                            L", " +
+                            Count(lines, Tr(L"wiersz", L"line"), Tr(L"wiersze", L"lines"),
+                                  Tr(L"wierszy", L"lines"))});
         if (it.type == ItemType::Color) {
             WCHAR rgb[64];
             swprintf_s(rgb, L"RGB %u, %u, %u", (it.color >> 16) & 0xFF, (it.color >> 8) & 0xFF,
                        it.color & 0xFF);
-            rows.push_back({L"Kolor", rgb});
+            rows.push_back({Tr(L"Kolor", L"Color"), rgb});
         }
     }
     if (!it.source.empty()) {
-        rows.push_back({L"Źródło", it.source});
+        rows.push_back({Tr(L"Źródło", L"Source"), it.source});
     }
     if (it.kind == Kind::Template) {
-        rows.push_back({L"Utworzono", FormatWhen(it.time)});
-        rows.push_back({L"Skrót", it.hotkey ? KeyName(it.hotkey) : L"brak"});
+        rows.push_back({Tr(L"Utworzono", L"Created"), FormatWhen(it.time)});
+        rows.push_back(
+            {Tr(L"Skrót", L"Shortcut"), it.hotkey ? KeyName(it.hotkey) : Tr(L"brak", L"none")});
     } else {
-        rows.push_back({L"Skopiowano", FormatWhen(it.time)});
+        rows.push_back({Tr(L"Skopiowano", L"Copied"), FormatWhen(it.time)});
     }
     if (it.kind == Kind::Pinned && it.pinnedTime) {
-        rows.push_back({L"Przypięto", FormatWhen(it.pinnedTime)});
+        rows.push_back({Tr(L"Przypięto", L"Pinned"), FormatWhen(it.pinnedTime)});
     }
-    rows.push_back({L"Wklejano", it.pasteCount ? Count(it.pasteCount, L"raz", L"razy", L"razy") +
-                                                     L" · ostatnio " + FormatWhen(it.lastPasted)
-                                               : L"jeszcze nie"});
+    rows.push_back({Tr(L"Wklejano", L"Pasted"),
+                    it.pasteCount ? Count(it.pasteCount, Tr(L"raz", L"time"), Tr(L"razy", L"times"),
+                                          Tr(L"razy", L"times")) +
+                                        Tr(L" · ostatnio ", L" · last ") + FormatWhen(it.lastPasted)
+                                  : Tr(L"jeszcze nie", L"not yet")});
     return rows;
 }
 
@@ -6478,10 +6598,11 @@ float DrawPreview(const Item& it, float x, float y, float right) {
             Add(drawn, HIT(it.id)).dblclick = [id = it.id] { OpenEditor(id, true); };
         } else {
             LoadPreview(it.id);
-            Text(L"Wczytywanie podglądu…", g_fonts.smallCenter, box, t.text2);
+            Text(Tr(L"Wczytywanie podglądu…", L"Loading the preview…"), g_fonts.smallCenter, box,
+                 t.text2);
         }
-        Text(L"Podgląd · 100% w „Otwórz”", g_fonts.small, {x, box.bottom + 4, right, box.bottom + 22},
-             t.text2);
+        Text(Tr(L"Podgląd · 100% w „Otwórz”", L"Preview · 100% in “Open”"), g_fonts.small,
+             {x, box.bottom + 4, right, box.bottom + 22}, t.text2);
         return box.bottom + 26;
     }
     if (it.type == ItemType::Color && it.kind != Kind::Template) {
@@ -6513,23 +6634,25 @@ float DrawPreview(const Item& it, float x, float y, float right) {
     }
     if (g_editingText && g_detailsId == it.id) {
         D2D1_RECT_F field{x, y, right, y + 220};
-        PlaceField(FEditText, field, L"Treść elementu");
+        PlaceField(FEditText, field, Tr(L"Treść elementu", L"Item content"));
         float by = field.bottom + 8;
         float bw = (w - 8) / 2;
-        Button({x, by, x + bw, by + 32}, HIT(0), L"Zapisz", kIconSave, kAccent).click = [id = it.id] {
-            SaveEditedText(id, FieldText(FEditText));
-            g_editingText = false;
-            SetFocus(g_hwnd);
-            Redraw();
-        };
-        Button({right - bw, by, right, by + 32}, HIT(0), L"Anuluj").click = [] {
+        Button({x, by, x + bw, by + 32}, HIT(0), Tr(L"Zapisz", L"Save"), kIconSave, kAccent).click =
+            [id = it.id] {
+                SaveEditedText(id, FieldText(FEditText));
+                g_editingText = false;
+                SetFocus(g_hwnd);
+                Redraw();
+            };
+        Button({right - bw, by, right, by + 32}, HIT(0), Tr(L"Anuluj", L"Cancel")).click = [] {
             g_editingText = false;
             SetFocus(g_hwnd);
             Redraw();
         };
         Text(it.html.empty() && it.rtf.empty()
-                 ? L"Ctrl+Enter zapisuje, Esc anuluje."
-                 : L"Po zapisie formatowanie zniknie i zostanie zwykły tekst.",
+                 ? Tr(L"Ctrl+Enter zapisuje, Esc anuluje.", L"Ctrl+Enter saves, Esc cancels.")
+                 : Tr(L"Po zapisie formatowanie zniknie i zostanie zwykły tekst.",
+                      L"Saving removes the formatting and keeps plain text."),
              g_fonts.small, {x, by + 38, right, by + 56}, t.text2);
         return by + 60;
     }
@@ -6546,7 +6669,8 @@ float DrawPreview(const Item& it, float x, float y, float right) {
         if (layout) {
             ID2D1SolidColorBrush* accent = nullptr;
             g_rt->CreateSolidColorBrush(t.accentText, &accent);
-            for (const wchar_t* field : {L"{data}", L"{godzina}", L"{schowek}"}) {
+            for (const wchar_t* field :
+                 {L"{data}", L"{godzina}", L"{schowek}", L"{date}", L"{time}", L"{clipboard}"}) {
                 size_t n = wcslen(field);
                 for (size_t pos = text.find(field); pos != std::wstring::npos;
                      pos = text.find(field, pos + n)) {
@@ -6575,19 +6699,20 @@ float DrawPasteAs(const Item& it, float x, float y, float right) {
     };
     std::vector<Option> options;
     if (it.imageWidth) {
-        options = {{L"Obraz w oryginale", kIconImage, PasteMode::Normal},
-                   {L"Plik PNG", kIconFiles, PasteMode::PngFile},
-                   {L"Ścieżka do pliku", kIconLink, PasteMode::PngPath}};
+        options = {{Tr(L"Obraz w oryginale", L"Original image"), kIconImage, PasteMode::Normal},
+                   {Tr(L"Plik PNG", L"PNG file"), kIconFiles, PasteMode::PngFile},
+                   {Tr(L"Ścieżka do pliku", L"File path"), kIconLink, PasteMode::PngPath}};
     } else if (it.files.empty() && it.kind != Kind::Template) {
-        options.push_back({L"Zwykły tekst", kIconText, PasteMode::Plain});
+        options.push_back({Tr(L"Zwykły tekst", L"Plain text"), kIconText, PasteMode::Plain});
         if (!it.html.empty() || !it.rtf.empty()) {
-            options.push_back({L"Z formatowaniem", kIconFont, PasteMode::Normal});
+            options.push_back(
+                {Tr(L"Z formatowaniem", L"With formatting"), kIconFont, PasteMode::Normal});
         }
     }
     if (options.empty()) {
         return y;
     }
-    y = SectionTitle(L"Wklej jako", x, y, right);
+    y = SectionTitle(Tr(L"Wklej jako", L"Paste as"), x, y, right);
     for (const Option& o : options) {
         D2D1_RECT_F r{x, y, right, y + 36};
         Hit h = HIT(o.glyph);
@@ -6607,13 +6732,13 @@ float DrawPasteAs(const Item& it, float x, float y, float right) {
 float DrawOrganize(const Item& it, float x, float y, float right) {
     const Theme& t = g_theme;
     UINT64 id = it.id;
-    y = SectionTitle(L"Porządkowanie", x, y, right);
+    y = SectionTitle(Tr(L"Porządkowanie", L"Organize"), x, y, right);
     float labelWidth = 76;
     auto label = [&](const wchar_t* s, float h = 32) {
         Text(s, g_fonts.small, {x, y, x + labelWidth, y + h}, t.text2);
     };
 
-    label(L"Kategoria");
+    label(Tr(L"Kategoria", L"Category"));
     {
         D2D1_RECT_F r{x + labelWidth, y, right, y + 32};
         Hit h = HIT(id);
@@ -6628,7 +6753,7 @@ float DrawOrganize(const Item& it, float x, float y, float right) {
         y += 40;
     }
 
-    label(L"Tagi");
+    label(Tr(L"Tagi", L"Tags"));
     {
         float tx = x + labelWidth;
         float ty = y + 4;
@@ -6649,7 +6774,8 @@ float DrawOrganize(const Item& it, float x, float y, float right) {
             ty += 32;
         }
         D2D1_RECT_F field{x + labelWidth, ty - 4, right, ty + 28};
-        Field& f = PlaceField(FTagAdd, field, L"Dodaj tag i naciśnij Enter");
+        Field& f = PlaceField(FTagAdd, field,
+                              Tr(L"Dodaj tag i naciśnij Enter", L"Add a tag and press Enter"));
         f.onKey = [id](UINT vk) {
             if (vk == VK_RETURN) {
                 AddTag(id, FieldText(FTagAdd));
@@ -6670,10 +6796,12 @@ float DrawOrganize(const Item& it, float x, float y, float right) {
         Stroke(r, t.controlStroke, 4);
         if (it.emoji.empty()) {
             Glyph(kIconEmoji, g_fonts.icon14, {r.left + 10, r.top, r.left + 28, r.bottom}, t.text2);
-            Text(L"Brak", g_fonts.row, {r.left + 36, r.top, r.right, r.bottom}, t.text2);
+            Text(Tr(L"Brak", L"None"), g_fonts.row, {r.left + 36, r.top, r.right, r.bottom},
+                 t.text2);
         } else {
             Emoji(it.emoji, g_fonts.emoji20, {r.left + 6, r.top, r.left + 34, r.bottom});
-            Text(L"Zmień", g_fonts.row, {r.left + 40, r.top, r.right, r.bottom}, t.text);
+            Text(Tr(L"Zmień", L"Change"), g_fonts.row, {r.left + 40, r.top, r.right, r.bottom},
+                 t.text);
         }
         Add(r, h).click = [r, h, id] {
             if (!ToggleFlyout(h)) {
@@ -6689,7 +6817,7 @@ float DrawOrganize(const Item& it, float x, float y, float right) {
         y += 40;
     }
 
-    label(L"Kolor");
+    label(Tr(L"Kolor", L"Color"));
     {
         float cx = x + labelWidth + 14;
         for (BYTE c = 0; c < kColorCount; c++) {
@@ -6725,7 +6853,7 @@ float DrawOrganize(const Item& it, float x, float y, float right) {
 
 float DrawInfo(const Item& it, float x, float y, float right) {
     const Theme& t = g_theme;
-    y = SectionTitle(L"Informacje", x, y, right);
+    y = SectionTitle(Tr(L"Informacje", L"Information"), x, y, right);
     for (const InfoRow& row : ItemInfo(it)) {
         Text(row.label, g_fonts.small, {x, y, x + 100, y + 22}, t.text2);
         Text(row.value, g_fonts.small, {x + 104, y, right, y + 22}, t.text);
@@ -6747,11 +6875,13 @@ void DrawDetails(const D2D1_RECT_F& card, bool inPlace) {
     // Header.
     float y = card.top + 8;
     if (inPlace) {
-        IconButton({card.left + 4, y, card.left + 40, y + 32}, HIT(0), kIconBack, L"Wróć do listy")
+        IconButton({card.left + 4, y, card.left + 40, y + 32}, HIT(0), kIconBack,
+                   Tr(L"Wróć do listy", L"Back to the list"))
             .click = [] { CloseDetails(); };
-        std::wstring crumb = g_tab == Tab::History    ? L"Historia"
-                             : g_tab == Tab::Pinned   ? L"Przypięte › " + CategoryName(it.category)
-                                                      : L"Szablony";
+        std::wstring crumb = g_tab == Tab::History ? Tr(L"Historia", L"History")
+                             : g_tab == Tab::Pinned
+                                 ? Tr(L"Przypięte › ", L"Pinned › ") + CategoryName(it.category)
+                                 : Tr(L"Szablony", L"Templates");
         Text(crumb, g_fonts.small, {card.left + 46, y, right, y + 32}, t.text2);
         y += 36;
     }
@@ -6766,12 +6896,13 @@ void DrawDetails(const D2D1_RECT_F& card, bool inPlace) {
     float headRight = inPlace ? right : right - 36;
     std::wstring title = it.kind == Kind::Template ? it.name : TypeLabel(it);
     Text(title, g_fonts.subtitle, {x + 46, y + 2, headRight, y + 22}, t.text);
-    std::wstring meta = it.kind == Kind::Template ? L"Szablon" : TypeLabel(it);
+    std::wstring meta = it.kind == Kind::Template ? Tr(L"Szablon", L"Template") : TypeLabel(it);
     meta = it.kind == Kind::Template ? meta : (it.source.empty() ? L"" : it.source + L" · ");
     meta += FormatWhen(it.kind == Kind::Pinned && it.pinnedTime ? it.pinnedTime : it.time);
     Text(meta, g_fonts.small, {x + 46, y + 22, headRight, y + 40}, t.text2);
     if (!inPlace) {
-        IconButton({right - 32, y + 4, right, y + 36}, HIT(0), kIconClose, L"Zamknij szczegóły")
+        IconButton({right - 32, y + 4, right, y + 36}, HIT(0), kIconClose,
+                   Tr(L"Zamknij szczegóły", L"Close the details"))
             .click = [] { CloseDetails(); };
     }
     y += 50;
@@ -6779,17 +6910,15 @@ void DrawDetails(const D2D1_RECT_F& card, bool inPlace) {
     // Commands.
     {
         float bx = x;
-        float pw = ButtonWidth(L"Wklej", kIconPaste);
-        Button({bx, y, bx + pw, y + 32}, HIT(0), L"Wklej", kIconPaste, kAccent).click = [id] {
-            PasteId(id, PasteMode::Normal);
-        };
+        float pw = ButtonWidth(Tr(L"Wklej", L"Paste"), kIconPaste);
+        Button({bx, y, bx + pw, y + 32}, HIT(0), Tr(L"Wklej", L"Paste"), kIconPaste, kAccent)
+            .click = [id] { PasteId(id, PasteMode::Normal); };
         bx += pw + 6;
         bool editable = it.imageWidth || CanEditText(it) || it.kind == Kind::Template;
         if (editable && !(g_editingText && g_detailsId == id)) {
-            float ew = ButtonWidth(L"Edytuj", kIconEdit);
-            Button({bx, y, bx + ew, y + 32}, HIT(0), L"Edytuj", kIconEdit).click = [id] {
-                EditItem(id);
-            };
+            float ew = ButtonWidth(Tr(L"Edytuj", L"Edit"), kIconEdit);
+            Button({bx, y, bx + ew, y + 32}, HIT(0), Tr(L"Edytuj", L"Edit"), kIconEdit).click =
+                [id] { EditItem(id); };
             bx += ew + 6;
         }
         float ix = right;
@@ -6800,28 +6929,32 @@ void DrawDetails(const D2D1_RECT_F& card, bool inPlace) {
         if (it.kind == Kind::Template) {
             Hit del = HIT(0);
             D2D1_RECT_F anchor{ix - 34, y, ix - 2, y + 32};
-            icon(del, kIconDelete, L"Usuń").click = [anchor, del, id] {
+            icon(del, kIconDelete, Tr(L"Usuń", L"Delete")).click = [anchor, del, id] {
                 ConfirmDeleteTemplate(anchor, del, id);
             };
         } else {
-            icon(HIT(0), kIconDelete, L"Usuń do kosza").click = [id] { TrashItem(id); };
+            icon(HIT(0), kIconDelete, Tr(L"Usuń do kosza", L"Move to trash")).click = [id] {
+                TrashItem(id);
+            };
         }
         if (CanOpen(it)) {
-            icon(HIT(0), kIconOpen, it.imageWidth ? L"Otwórz w 100%" : L"Otwórz").click = [id] {
-                OpenItem(id);
-            };
+            icon(HIT(0), kIconOpen,
+                 it.imageWidth ? Tr(L"Otwórz w 100%", L"Open at 100%") : Tr(L"Otwórz", L"Open"))
+                .click = [id] { OpenItem(id); };
         }
         if (it.kind == Kind::History) {
             Hit pin = HIT(0);
             D2D1_RECT_F anchor{ix - 34, y, ix - 2, y + 32};
-            icon(pin, kIconPin, L"Przypnij").click = [anchor, pin, id] {
+            icon(pin, kIconPin, Tr(L"Przypnij", L"Pin")).click = [anchor, pin, id] {
                 OpenPinMenu(anchor, pin, id);
             };
         } else if (it.kind == Kind::Pinned) {
-            icon(HIT(0), kIconUnpin, L"Odepnij").click = [id] { UnpinItem(id); };
+            icon(HIT(0), kIconUnpin, Tr(L"Odepnij", L"Unpin")).click = [id] { UnpinItem(id); };
         }
         if (it.imageWidth || !it.text.empty()) {
-            icon(HIT(0), kIconSave, L"Zapisz jako…").click = [id] { SaveItemAs(id); };
+            icon(HIT(0), kIconSave, Tr(L"Zapisz jako…", L"Save as…")).click = [id] {
+                SaveItemAs(id);
+            };
         }
         y += 44;
     }
@@ -6892,32 +7025,32 @@ void OpenMainMenu(const D2D1_RECT_F& anchor, Hit owner) {
     }
     std::vector<MenuItem> items;
     MenuItem pause;
-    pause.label = L"Wstrzymaj zapisywanie";
+    pause.label = Tr(L"Wstrzymaj zapisywanie", L"Pause saving");
     pause.glyph = kIconPause;
     pause.checked = g_paused;
     pause.action = [] { SetPaused(!g_paused); };
     items.push_back(pause);
     MenuItem trash;
-    trash.label = L"Kosz";
+    trash.label = Tr(L"Kosz", L"Trash");
     trash.glyph = kIconDelete;
     size_t inTrash = CountTrash();
-    trash.hint = inTrash ? std::to_wstring(inTrash) : L"pusty";
+    trash.hint = inTrash ? std::to_wstring(inTrash) : Tr(L"pusty", L"empty");
     trash.action = [] { ShowPage(Page::Trash); };
     items.push_back(trash);
     items.push_back({.separator = true});
     MenuItem exportItem;
-    exportItem.label = L"Eksportuj dane…";
+    exportItem.label = Tr(L"Eksportuj dane…", L"Export data…");
     exportItem.glyph = kIconExport;
     exportItem.action = [] { ShowExportDialog(); };
     items.push_back(exportItem);
     MenuItem importItem;
-    importItem.label = L"Importuj dane…";
+    importItem.label = Tr(L"Importuj dane…", L"Import data…");
     importItem.glyph = kIconImport;
     importItem.action = [] { ShowImportDialog(); };
     items.push_back(importItem);
     items.push_back({.separator = true});
     MenuItem settings;
-    settings.label = L"Ustawienia";
+    settings.label = Tr(L"Ustawienia", L"Settings");
     settings.glyph = kIconSettings;
     settings.action = [] { ShowPage(Page::Settings); };
     items.push_back(settings);
@@ -6931,19 +7064,22 @@ float DrawTitleButtons(float width, bool withMenu) {
     Add({0, 0, width, kTitleHeight}, HIT(0)).caption = true;
     float x = width - 4;
     x -= 40;
-    IconButton({x, 4, x + 40, 36}, HIT(0), kIconClose, L"Zamknij").click = [] {
+    IconButton({x, 4, x + 40, 36}, HIT(0), kIconClose, Tr(L"Zamknij", L"Close")).click = [] {
         HidePanel(true);
     };
     x -= 40;
     IconButton({x, 4, x + 40, 36}, HIT(0), g_onTop ? kIconPinned : kIconPin,
-               g_onTop ? L"Odepnij okno" : L"Przypnij okno na wierzchu",
+               g_onTop ? Tr(L"Odepnij okno", L"Don't keep on top")
+                       : Tr(L"Przypnij okno na wierzchu", L"Keep on top"),
                g_onTop ? t.accent : t.text)
         .click = [] { SetOnTop(!g_onTop); };
     if (withMenu) {
         x -= 40;
         D2D1_RECT_F menu{x, 4, x + 40, 36};
         Hit h = HIT(0);
-        IconButton(menu, h, kIconMore, L"Więcej").click = [menu, h] { OpenMainMenu(menu, h); };
+        IconButton(menu, h, kIconMore, Tr(L"Więcej", L"More")).click = [menu, h] {
+            OpenMainMenu(menu, h);
+        };
     }
     return x;
 }
@@ -6953,21 +7089,24 @@ void DrawSearchOrTitle(float left, float right, const wchar_t* title) {
     if (g_searchOpen) {
         D2D1_RECT_F box{left, 5, right - 4, 35};
         PlaceField(FSearch, box,
-                   g_page == Page::Trash        ? L"Szukaj w koszu…"
-                   : g_tab == Tab::Pinned       ? L"Szukaj w przypiętych, #tag…"
-                   : g_tab == Tab::Templates    ? L"Szukaj w szablonach…"
-                                                : L"Szukaj w historii, #tag…",
+                   g_page == Page::Trash ? Tr(L"Szukaj w koszu…", L"Search the trash…")
+                   : g_tab == Tab::Pinned
+                       ? Tr(L"Szukaj w przypiętych, #tag…", L"Search pinned, #tag…")
+                   : g_tab == Tab::Templates
+                       ? Tr(L"Szukaj w szablonach…", L"Search templates…")
+                       : Tr(L"Szukaj w historii, #tag…", L"Search the history, #tag…"),
                    28, 28);
         Glyph(kIconSearch, g_fonts.icon14, {box.left + 8, box.top, box.left + 28, box.bottom},
               t.text2);
         D2D1_RECT_F clear{box.right - 28, box.top + 4, box.right - 4, box.bottom - 4};
-        IconButton(clear, HIT(0), kIconCancel, L"Zamknij wyszukiwanie", t.text2, g_fonts.icon12)
+        IconButton(clear, HIT(0), kIconCancel, Tr(L"Zamknij wyszukiwanie", L"Close the search"),
+                   t.text2, g_fonts.icon12)
             .click = [] { CloseSearch(); };
         return;
     }
     Text(title, g_fonts.title, {left, 0, right - 44, kTitleHeight}, t.text);
     IconButton({right - 40, 4, right, 36}, HIT(0), kIconSearch,
-               (L"Szukaj (" + KeyName(g_keys[ScSearch]) + L")").c_str())
+               (Tr(L"Szukaj (", L"Search (") + KeyName(g_keys[ScSearch]) + L")").c_str())
         .click = [] { OpenSearch(); };
 }
 
@@ -6975,13 +7114,15 @@ void DrawMainTitle(float width) {
     const Theme& t = g_theme;
     float right = DrawTitleButtons(width, true);
     Glyph(kIconApp, g_fonts.icon16, {12, 12, 28, 28}, t.text);
-    DrawSearchOrTitle(g_searchOpen ? 40.f : 36.f, right, L"Schowek");
+    DrawSearchOrTitle(g_searchOpen ? 40.f : 36.f, right, Tr(L"Schowek", L"Clipboard"));
 }
 
 void DrawPageTitle(float width, const wchar_t* title, bool search) {
     const Theme& t = g_theme;
     float right = DrawTitleButtons(width, false);
-    IconButton({4, 4, 44, 36}, HIT(0), kIconBack, L"Wróć").click = [] { ShowPage(Page::Main); };
+    IconButton({4, 4, 44, 36}, HIT(0), kIconBack, Tr(L"Wróć", L"Back")).click = [] {
+        ShowPage(Page::Main);
+    };
     if (search) {
         DrawSearchOrTitle(50, right, title);
     } else {
@@ -6991,8 +7132,10 @@ void DrawPageTitle(float width, const wchar_t* title, bool search) {
 
 void DrawTabs(float width) {
     const Theme& t = g_theme;
-    static const std::pair<Tab, const wchar_t*> kTabs[] = {
-        {Tab::History, L"Historia"}, {Tab::Pinned, L"Przypięte"}, {Tab::Templates, L"Szablony"}};
+    const std::pair<Tab, const wchar_t*> kTabs[] = {
+        {Tab::History, Tr(L"Historia", L"History")},
+        {Tab::Pinned, Tr(L"Przypięte", L"Pinned")},
+        {Tab::Templates, Tr(L"Szablony", L"Templates")}};
     float x = 12;
     for (const auto& [tab, label] : kTabs) {
         float w = TextWidth(label, g_fonts.tab) + 24;
@@ -7034,8 +7177,8 @@ void DrawShortcutsPopup(const D2D1_RECT_F& footer) {
     D2D1_RECT_F r{12, footer.top - 6 - h, 12 + w, footer.top - 6};
     Fill(r, t.flyout, 8);
     Stroke(r, t.controlStroke, 8);
-    Text(L"Skróty klawiszowe", g_fonts.smallBold, {r.left + 14, r.top + 12, r.right, r.top + 32},
-         t.text);
+    Text(Tr(L"Skróty klawiszowe", L"Keyboard shortcuts"), g_fonts.smallBold,
+         {r.left + 14, r.top + 12, r.right, r.top + 32}, t.text);
     float y = r.top + 40;
     for (const auto& [key, label] : rows) {
         Kbd(r.left + 14, y + 12, key);
@@ -7049,33 +7192,41 @@ void DrawFooter(const D2D1_RECT_F& footer) {
     Fill({footer.left, footer.top, footer.right, footer.top + 1}, t.divider);
     float cy = (footer.top + footer.bottom) / 2;
     IconButton({footer.left + 4, cy - 16, footer.left + 36, cy + 16}, HIT(0), kIconSettings,
-               L"Ustawienia")
+               Tr(L"Ustawienia", L"Settings"))
         .click = [] { ShowPage(Page::Settings); };
     Hit info = HIT(0);
     IconButton({footer.left + 38, cy - 16, footer.left + 70, cy + 16}, info, kIconInfo, nullptr);
     float clearLeft = footer.right;
     if (g_tab == Tab::History && CountItems(Kind::History)) {
-        float w = ButtonWidth(L"Wyczyść historię", kIconDelete);
+        float w = ButtonWidth(Tr(L"Wyczyść historię", L"Clear history"), kIconDelete);
         D2D1_RECT_F clear{footer.right - 6 - w, cy - 15, footer.right - 6, cy + 15};
-        Button(clear, HIT(0), L"Wyczyść historię", kIconDelete).click = [] { ClearHistory(); };
+        Button(clear, HIT(0), Tr(L"Wyczyść historię", L"Clear history"), kIconDelete).click = [] {
+            ClearHistory();
+        };
         clearLeft = clear.left;
     }
     std::wstring count;
     size_t history = CountItems(Kind::History), pinned = CountItems(Kind::Pinned),
            templates = CountItems(Kind::Template);
     if (!g_query.empty() || (g_tab == Tab::Pinned && !g_tagFilter.empty())) {
-        count = L"Wyniki: " + std::to_wstring(EntryCount());
+        count = Tr(L"Wyniki: ", L"Results: ") + std::to_wstring(EntryCount());
     } else if (g_tab == Tab::History) {
-        count = Count(history, L"element", L"elementy", L"elementów") + L" · " +
-                Count(pinned, L"przypięty", L"przypięte", L"przypiętych");
+        count = Count(history, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+                      Tr(L"elementów", L"items")) +
+                L" · " +
+                Count(pinned, Tr(L"przypięty", L"pinned"), Tr(L"przypięte", L"pinned"),
+                      Tr(L"przypiętych", L"pinned"));
     } else if (g_tab == Tab::Pinned) {
-        count = Count(pinned, L"przypięty", L"przypięte", L"przypiętych") +
-                L" · zapisane na stałe, szyfrowane";
+        count = Count(pinned, Tr(L"przypięty", L"pinned"), Tr(L"przypięte", L"pinned"),
+                      Tr(L"przypiętych", L"pinned")) +
+                Tr(L" · zapisane na stałe, szyfrowane", L" · saved permanently, encrypted");
     } else {
-        count = Count(templates, L"szablon", L"szablony", L"szablonów") + L" · zapisane na dysku";
+        count = Count(templates, Tr(L"szablon", L"template"), Tr(L"szablony", L"templates"),
+                      Tr(L"szablonów", L"templates")) +
+                Tr(L" · zapisane na dysku", L" · saved on disk");
     }
     if (g_paused) {
-        count += L" · zapisywanie wstrzymane";
+        count += Tr(L" · zapisywanie wstrzymane", L" · saving paused");
     }
     Text(count, g_fonts.small, {footer.left + 78, footer.top, clearLeft - 8, footer.bottom}, t.text2);
     if (Hot(info)) {
@@ -7131,11 +7282,11 @@ void DrawTrashEntry(const Item& it, const D2D1_RECT_F& r) {
         g_selectedId = id;
         D2D1_POINT_2F p = g_s->mouse;
         MenuItem restore;
-        restore.label = L"Przywróć";
+        restore.label = Tr(L"Przywróć", L"Restore");
         restore.glyph = kIconRestore;
         restore.action = [id] { RestoreItem(id, true); };
         MenuItem purge;
-        purge.label = L"Usuń na stałe";
+        purge.label = Tr(L"Usuń na stałe", L"Delete permanently");
         purge.glyph = kIconDelete;
         purge.danger = true;
         purge.action = [id] { PurgeItem(id); };
@@ -7147,18 +7298,19 @@ void DrawTrashEntry(const Item& it, const D2D1_RECT_F& r) {
     UINT64 now = NowFileTime();
     UINT64 end = it.deletedTime + kTrashDays * kDay;
     UINT64 daysLeft = end > now ? (end - now + kDay - 1) / kDay : 0;
-    std::wstring where = it.kind == Kind::Pinned     ? L"Przypięte"
-                         : it.kind == Kind::Template ? L"Szablony"
-                                                     : L"Historia";
-    std::wstring left = daysLeft > 1 ? L"zostało " + Count(daysLeft, L"dzień", L"dni", L"dni")
-                                     : L"zniknie w ciągu doby";
-    Text(where + L" · usunięto " + FormatWhen(it.deletedTime) + L" · " + left, g_fonts.small,
-         {r.left + 54, r.top + 30, right, r.top + 48}, t.text2);
+    std::wstring where = it.kind == Kind::Pinned     ? Tr(L"Przypięte", L"Pinned")
+                         : it.kind == Kind::Template ? Tr(L"Szablony", L"Templates")
+                                                     : Tr(L"Historia", L"History");
+    std::wstring left = daysLeft <= 1 ? Tr(L"zniknie w ciągu doby", L"goes away within a day")
+                        : g_english   ? Count(daysLeft, L"day", L"days", L"days") + L" left"
+                                      : L"zostało " + Count(daysLeft, L"dzień", L"dni", L"dni");
+    Text(where + Tr(L" · usunięto ", L" · deleted ") + FormatWhen(it.deletedTime) + L" · " + left,
+         g_fonts.small, {r.left + 54, r.top + 30, right, r.top + 48}, t.text2);
 }
 
 void DrawTrashPage(D2D1_SIZE_F s) {
     const Theme& t = g_theme;
-    DrawPageTitle(s.width, L"Kosz", true);
+    DrawPageTitle(s.width, Tr(L"Kosz", L"Trash"), true);
     D2D1_RECT_F card{8, kTitleHeight, s.width - 8, s.height - 8};
     Fill(card, t.layer, 8);
     Stroke(card, t.layerStroke, 8);
@@ -7166,27 +7318,37 @@ void DrawTrashPage(D2D1_SIZE_F s) {
     D2D1_RECT_F head{card.left + 12, card.top + 6, card.right - 12, card.top + 50};
     float bw = 0;
     if (count) {
-        bw = ButtonWidth(L"Opróżnij kosz", kIconDelete);
+        bw = ButtonWidth(Tr(L"Opróżnij kosz", L"Empty trash"), kIconDelete);
         D2D1_RECT_F b{head.right - bw, head.top + 6, head.right, head.bottom - 6};
         Hit h = HIT(0);
-        Button(b, h, L"Opróżnij kosz", kIconDelete, kDanger).click = [b, h, count] {
+        Button(b, h, Tr(L"Opróżnij kosz", L"Empty trash"), kIconDelete, kDanger).click = [b, h,
+                                                                                          count] {
             if (!ToggleFlyout(h)) {
                 OpenConfirm(b, h,
-                            L"Usunąć na stałe " + Count(count, L"element", L"elementy", L"elementów") +
-                                L" z kosza? Tego nie da się cofnąć.",
-                            L"Opróżnij", [] { EmptyTrash(); });
+                            Tr(L"Usunąć na stałe ", L"Permanently delete ") +
+                                Count(count, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+                                      Tr(L"elementów", L"items")) +
+                                Tr(L" z kosza? Tego nie da się cofnąć.",
+                                   L" from the trash? This can't be undone."),
+                            Tr(L"Opróżnij", L"Empty"), [] { EmptyTrash(); });
             }
         };
     }
-    Text(count ? Count(count, L"element", L"elementy", L"elementów") +
-                     L" · każdy znika na stałe 30 dni po usunięciu"
-               : L"Usunięte elementy czekają tu 30 dni, potem znikają na stałe.",
+    Text(count ? Count(count, Tr(L"element", L"item"), Tr(L"elementy", L"items"),
+                       Tr(L"elementów", L"items")) +
+                     Tr(L" · każdy znika na stałe 30 dni po usunięciu",
+                        L" · each is gone for good 30 days after deletion")
+               : Tr(L"Usunięte elementy czekają tu 30 dni, potem znikają na stałe.",
+                    L"Deleted items wait here for 30 days, then they're gone for good."),
          g_fonts.small, {head.left, head.top, head.right - bw - 12, head.bottom}, t.text2);
     Fill({card.left + 8, head.bottom, card.right - 8, head.bottom + 1}, t.divider);
     D2D1_RECT_F area{card.left + 4, head.bottom + 4, card.right - 4, card.bottom - 4};
     g_listArea = area;
     if (g_rows.empty()) {
-        EmptyMessage(count ? L"Brak wyników. Spróbuj innych słów." : L"Kosz jest pusty.", area);
+        EmptyMessage(
+            count ? Tr(L"Brak wyników. Spróbuj innych słów.", L"No results. Try other words.")
+                  : Tr(L"Kosz jest pusty.", L"The trash is empty."),
+            area);
     } else {
         DrawList(area, [](const Row& row, D2D1_RECT_F r) {
             if (const Item* it = FindItem(row.id)) {
@@ -7225,7 +7387,7 @@ void ShortcutMenu(const D2D1_RECT_F& anchor, Hit owner, int i) {
     }
     std::vector<MenuItem> items;
     MenuItem change;
-    change.label = L"Zmień skrót…";
+    change.label = Tr(L"Zmień skrót…", L"Change shortcut…");
     change.glyph = kIconKeyboard;
     change.action = [i] {
         StartRecording(i, [i](UINT key) {
@@ -7237,13 +7399,14 @@ void ShortcutMenu(const D2D1_RECT_F& anchor, Hit owner, int i) {
     };
     items.push_back(change);
     MenuItem reset;
-    reset.label = L"Przywróć domyślny (" + KeyName(kShortcuts[i].def) + L")";
+    reset.label =
+        Tr(L"Przywróć domyślny (", L"Restore default (") + KeyName(kShortcuts[i].def) + L")";
     reset.glyph = kIconRestore;
     reset.disabled = g_keys[i] == kShortcuts[i].def;
     reset.action = [i] { SetShortcut(i, kShortcuts[i].def); };
     items.push_back(reset);
     MenuItem off;
-    off.label = L"Wyłącz";
+    off.label = Tr(L"Wyłącz", L"Turn off");
     off.glyph = kIconCancel;
     off.disabled = (g_keys[i] & kKeyOff) != 0;
     off.action = [i] { SetShortcut(i, kKeyOff); };
@@ -7280,10 +7443,11 @@ float DrawShortcutRows(float x, float y, float right, ShortcutScope a, ShortcutS
         if (MouseOver(row)) {
             Fill(Inset(row, 0, 2), SubtleFill(h1), 4);
         }
-        Text(kShortcuts[i].label, g_fonts.row, {x + 16, ry, right - 220, ry + 40}, t.text);
+        Text(std::wstring(kShortcuts[i].label), g_fonts.row, {x + 16, ry, right - 220, ry + 40},
+             t.text);
         if (!conflicts[k].empty()) {
             Glyph(kIconWarning, g_fonts.icon12, {x + 16, ry + 34, x + 30, ry + 50}, t.warning);
-            Text(L"Ten sam skrót ma: " + conflicts[k], g_fonts.small,
+            Text(Tr(L"Ten sam skrót ma: ", L"Also used by: ") + conflicts[k], g_fonts.small,
                  {x + 36, ry + 32, right - 16, ry + 52}, t.warning);
         }
         D2D1_RECT_F more{right - 44, ry + 4, right - 12, ry + 36};
@@ -7291,11 +7455,12 @@ float DrawShortcutRows(float x, float y, float right, ShortcutScope a, ShortcutS
         float kx = more.left - 8;
         float cy = ry + 20;
         if (g_recordTarget == i) {
-            std::wstring s = L"Naciśnij skrót… (Esc anuluje)";
+            std::wstring s =
+                Tr(L"Naciśnij skrót… (Esc anuluje)", L"Press a shortcut… (Esc cancels)");
             float w = TextWidth(s, g_fonts.key) + 12;
             Kbd(kx - w, cy, s, true);
         } else if (g_keys[i] & kKeyOff) {
-            Text(L"Wyłączony", g_fonts.meta, {kx - 120, ry, kx, ry + 40}, t.text3);
+            Text(Tr(L"Wyłączony", L"Off"), g_fonts.meta, {kx - 120, ry, kx, ry + 40}, t.text3);
         } else {
             std::wstring s = ShortcutName(i);
             float w = TextWidth(s, g_fonts.key) + 12;
@@ -7310,10 +7475,9 @@ float DrawShortcutRows(float x, float y, float right, ShortcutScope a, ShortcutS
                 SetShortcut(i, key);
             });
         };
-        region.tip = L"Kliknij i naciśnij nowy skrót";
-        IconButton(more, moreHit, kIconMore, L"Więcej opcji").click = [more, moreHit, i] {
-            ShortcutMenu(more, moreHit, i);
-        };
+        region.tip = Tr(L"Kliknij i naciśnij nowy skrót", L"Click and press a new shortcut");
+        IconButton(more, moreHit, kIconMore, Tr(L"Więcej opcji", L"More options")).click =
+            [more, moreHit, i] { ShortcutMenu(more, moreHit, i); };
         ry += h;
     }
     return card.bottom + 8;
@@ -7321,30 +7485,47 @@ float DrawShortcutRows(float x, float y, float right, ShortcutScope a, ShortcutS
 
 void DrawSettingsPage(D2D1_SIZE_F s) {
     const Theme& t = g_theme;
-    DrawPageTitle(s.width, L"Ustawienia", false);
+    DrawPageTitle(s.width, Tr(L"Ustawienia", L"Settings"), false);
     D2D1_RECT_F view{0, kTitleHeight, s.width, s.height};
     float top = BeginScroll(g_pageScroll, view);
     float x = 16, right = s.width - 16;
     float y = top;
-    Text(L"Każda zmiana zapisuje się od razu, na stałe", g_fonts.small, {x + 2, y, right, y + 20},
-         t.text2);
+    Text(Tr(L"Każda zmiana zapisuje się od razu, na stałe",
+            L"Every change is saved right away, permanently"),
+         g_fonts.small, {x + 2, y, right, y + 20}, t.text2);
     y += 20;
     float combo = std::min(220.f, (right - x) * 0.42f);
 
-    y = SettingSection(L"Wygląd", x, y, right);
+    y = SettingSection(Tr(L"Wygląd", L"Appearance"), x, y, right);
     {
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconTheme, L"Motyw",
-                                    L"Jasny lub ciemny i kolor akcentu jak w Windows", combo);
-        Combo(c, HIT(0), {L"Zgodny z systemem", L"Jasny", L"Ciemny"}, (int)Setting(L"theme", 0),
-              [](int v) {
+        D2D1_RECT_F c = SettingCard(x, y, right, kIconLanguage, Tr(L"Język", L"Language"),
+                                    Tr(L"Polski w polskim Windows, w innym angielski",
+                                       L"Polish on a Polish Windows, else English"),
+                                    combo);
+        Combo(c, HIT(0), {Tr(L"Jak w Windows", L"Same as Windows"), L"Polski", L"English"},
+              (int)Setting(L"language", 0), [](int v) {
+                  SetSetting(L"language", v);
+                  ApplyLook();
+              });
+    }
+    {
+        D2D1_RECT_F c = SettingCard(x, y, right, kIconTheme, Tr(L"Motyw", L"Theme"),
+                                    Tr(L"Jasny lub ciemny i kolor akcentu jak w Windows",
+                                       L"Light or dark, with the accent color of Windows"),
+                                    combo);
+        Combo(c, HIT(0),
+              {Tr(L"Zgodny z systemem", L"Same as Windows"), Tr(L"Jasny", L"Light"),
+               Tr(L"Ciemny", L"Dark")},
+              (int)Setting(L"theme", 0), [](int v) {
                   SetSetting(L"theme", v);
                   ApplyLook();
               });
     }
     {
         INT64 value = std::clamp<INT64>(Setting(L"transparency", 30), 0, 90);
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconTransparency, L"Przezroczystość tła",
-                                    L"Tekst i ikony zostają wyraźne", combo);
+        D2D1_RECT_F c = SettingCard(
+            x, y, right, kIconTransparency, Tr(L"Przezroczystość tła", L"Background transparency"),
+            Tr(L"Tekst i ikony zostają wyraźne", L"Text and icons stay sharp"), combo);
         std::wstring label = std::to_wstring(value) + L" %";
         Text(label, g_fonts.meta, {c.right - 44, c.top, c.right, c.bottom}, t.text2);
         Slider({c.left, c.top, c.right - 50, c.bottom}, HIT(0), value / 90.f, [](float v) {
@@ -7354,30 +7535,43 @@ void DrawSettingsPage(D2D1_SIZE_F s) {
         });
     }
     {
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconPane, L"Szczegóły elementu",
-                                    L"Panel z boku albo w miejscu listy", combo);
-        Combo(c, HIT(0), {L"Panel z boku", L"W miejscu listy"}, (int)Setting(L"detailsMode", 0),
-              [](int v) {
+        D2D1_RECT_F c = SettingCard(
+            x, y, right, kIconPane, Tr(L"Szczegóły elementu", L"Item details"),
+            Tr(L"Panel z boku albo w miejscu listy", L"A side panel or in place of the list"),
+            combo);
+        Combo(c, HIT(0),
+              {Tr(L"Panel z boku", L"Side panel"), Tr(L"W miejscu listy", L"In place of the list")},
+              (int)Setting(L"detailsMode", 0), [](int v) {
                   CloseDetails();
                   SetSetting(L"detailsMode", v);
               });
     }
     {
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconLayout, L"Układ przypiętych",
-                                    L"Kategorie z boku albo zwijane sekcje", combo);
-        Combo(c, HIT(0), {L"Kategorie z boku", L"Zwijane sekcje"}, (int)Setting(L"pinnedLayout", 0),
-              [](int v) {
+        D2D1_RECT_F c =
+            SettingCard(x, y, right, kIconLayout, Tr(L"Układ przypiętych", L"Pinned layout"),
+                        Tr(L"Kategorie z boku albo zwijane sekcje",
+                           L"Categories at the side or collapsible sections"),
+                        combo);
+        Combo(c, HIT(0),
+              {Tr(L"Kategorie z boku", L"Categories at the side"),
+               Tr(L"Zwijane sekcje", L"Collapsible sections")},
+              (int)Setting(L"pinnedLayout", 0), [](int v) {
                   SetSetting(L"pinnedLayout", v);
                   Refresh();
               });
     }
 
-    y = SettingSection(L"Historia", x, y, right);
+    y = SettingSection(Tr(L"Historia", L"History"), x, y, right);
     {
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconClock, L"Automatyczne czyszczenie",
-                                    L"Tylko zwykła historia, nigdy przypięte i szablony", combo);
+        D2D1_RECT_F c = SettingCard(
+            x, y, right, kIconClock, Tr(L"Automatyczne czyszczenie", L"Automatic cleanup"),
+            Tr(L"Tylko zwykła historia, nigdy przypięte i szablony",
+               L"Only the regular history, never pinned items or templates"),
+            combo);
         Combo(c, HIT(0),
-              {L"Nigdy", L"Przy każdym restarcie", L"Codziennie", L"Co tydzień", L"Co miesiąc"},
+              {Tr(L"Nigdy", L"Never"), Tr(L"Przy każdym restarcie", L"On every restart"),
+               Tr(L"Codziennie", L"Daily"), Tr(L"Co tydzień", L"Weekly"),
+               Tr(L"Co miesiąc", L"Monthly")},
               (int)Setting(L"autoClean", 0), [](int v) {
                   if (v == 1) {
                       g_settings[L"cleanBoot"] = BootTime();
@@ -7388,24 +7582,34 @@ void DrawSettingsPage(D2D1_SIZE_F s) {
     }
     {
         bool on = Setting(L"fullRes", 1) != 0;
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconImage, L"Obrazy w pełnej rozdzielczości",
-                                    on ? L"Bez pomniejszania i kompresji stratnej"
-                                       : L"Nowe obrazy pomniejszam do 1920 px dłuższego boku",
-                                    80);
-        Text(on ? L"Wł." : L"Wył.", g_fonts.meta, {c.left, c.top, c.right - 50, c.bottom}, t.text);
+        D2D1_RECT_F c =
+            SettingCard(x, y, right, kIconImage,
+                        Tr(L"Obrazy w pełnej rozdzielczości", L"Full resolution images"),
+                        on ? Tr(L"Bez pomniejszania i kompresji stratnej",
+                                L"No downscaling or lossy compression")
+                           : Tr(L"Nowe obrazy pomniejszam do 1920 px dłuższego boku",
+                                L"New images are scaled down to 1920 px on the longer side"),
+                        80);
+        Text(on ? Tr(L"Wł.", L"On") : Tr(L"Wył.", L"Off"), g_fonts.meta,
+             {c.left, c.top, c.right - 50, c.bottom}, t.text);
         Toggle(c.right - 40, (c.top + c.bottom) / 2, HIT(0), on).click = [on] {
             SetSetting(L"fullRes", !on);
             Redraw();
         };
     }
 
-    y = SettingSection(L"Okno", x, y, right);
+    y = SettingSection(Tr(L"Okno", L"Window"), x, y, right);
     {
         WCHAR now[64];
-        swprintf_s(now, L"Teraz %ld × %ld, krawędzią lub rogiem", std::lround(g_sizeDip.width),
-                   std::lround(g_sizeDip.height));
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconSize, L"Rozmiar okna", now, combo);
-        Combo(c, HIT(0), {L"Do restartu komputera", L"Na stałe", L"Zawsze domyślny"},
+        swprintf_s(now,
+                   Tr(L"Teraz %ld × %ld, krawędzią lub rogiem",
+                      L"Now %ld × %ld, resize it from an edge or corner"),
+                   std::lround(g_sizeDip.width), std::lround(g_sizeDip.height));
+        D2D1_RECT_F c =
+            SettingCard(x, y, right, kIconSize, Tr(L"Rozmiar okna", L"Window size"), now, combo);
+        Combo(c, HIT(0),
+              {Tr(L"Do restartu komputera", L"Until restart"), Tr(L"Na stałe", L"Permanently"),
+               Tr(L"Zawsze domyślny", L"Always default")},
               (int)Setting(L"sizeMode", 0), [](int v) {
                   SetSetting(L"sizeMode", v);
                   g_settings[L"boot"] = BootTime();
@@ -7413,13 +7617,16 @@ void DrawSettingsPage(D2D1_SIZE_F s) {
               });
     }
     {
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconPosition, L"Pozycja okna",
-                                    L"Miejsce otwarcia po " + KeyName(g_keys[ScOpen]) +
-                                        L" i z zasobnika",
-                                    combo);
+        D2D1_RECT_F c =
+            SettingCard(x, y, right, kIconPosition, Tr(L"Pozycja okna", L"Window position"),
+                        Tr(L"Miejsce otwarcia po ", L"Where it opens with ") +
+                            KeyName(g_keys[ScOpen]) + Tr(L" i z zasobnika", L" and from the tray"),
+                        combo);
         Combo(c, HIT(0),
-              {L"Przy kursorze tekstowym", L"Przy myszy", L"Zapamiętana do restartu",
-               L"Zapamiętana na stałe"},
+              {Tr(L"Przy kursorze tekstowym", L"At the text cursor"),
+               Tr(L"Przy myszy", L"At the mouse"),
+               Tr(L"Zapamiętana do restartu", L"Remembered until restart"),
+               Tr(L"Zapamiętana na stałe", L"Remembered permanently")},
               (int)Setting(L"posMode", 0), [](int v) {
                   SetSetting(L"posMode", v);
                   if (v >= 2) {
@@ -7433,31 +7640,40 @@ void DrawSettingsPage(D2D1_SIZE_F s) {
               });
     }
 
-    y = SettingSection(L"Skróty klawiszowe", x, y, right);
-    y = DrawShortcutRows(x, y, right, kScopeGlobal, kScopeWindow, L"Okno schowka");
-    y = DrawShortcutRows(x, y, right, kScopeEditor, kScopeEditor, L"Edytor grafik");
-    Text(L"Skróty szablonów ustawisz w zakładce Szablony.", g_fonts.small,
-         {x + 2, y, right, y + 20}, t.text2);
+    y = SettingSection(Tr(L"Skróty klawiszowe", L"Keyboard shortcuts"), x, y, right);
+    y = DrawShortcutRows(x, y, right, kScopeGlobal, kScopeWindow,
+                         Tr(L"Okno schowka", L"Clipboard window"));
+    y = DrawShortcutRows(x, y, right, kScopeEditor, kScopeEditor,
+                         Tr(L"Edytor grafik", L"Image editor"));
+    Text(Tr(L"Skróty szablonów ustawisz w zakładce Szablony.",
+            L"Template shortcuts are set in the Templates tab."),
+         g_fonts.small, {x + 2, y, right, y + 20}, t.text2);
     y += 24;
 
-    y = SettingSection(L"Przechowywanie", x, y, right);
+    y = SettingSection(Tr(L"Przechowywanie", L"Storage"), x, y, right);
     {
         std::wstring used = g_storageBytes ? FormatSize(g_storageBytes) : L"…";
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconLock, L"Zapis na tym komputerze",
-                                    L"Szyfrowany kluczem konta · zajęte " + used, 90);
-        Text(L"Bez limitu", g_fonts.meta, c, t.text2);
+        D2D1_RECT_F c = SettingCard(
+            x, y, right, kIconLock, Tr(L"Zapis na tym komputerze", L"Stored on this computer"),
+            Tr(L"Szyfrowany kluczem konta · zajęte ", L"Encrypted with your account key · uses ") +
+                used,
+            90);
+        Text(Tr(L"Bez limitu", L"No limit"), g_fonts.meta, c, t.text2);
     }
     {
-        float w1 = ButtonWidth(L"Eksportuj…"), w2 = ButtonWidth(L"Importuj…");
-        D2D1_RECT_F c = SettingCard(x, y, right, kIconMove, L"Przenieś na inny komputer",
-                                    L"Przypięte, kategorie, tagi, szablony, ustawienia",
+        float w1 = ButtonWidth(Tr(L"Eksportuj…", L"Export…")),
+              w2 = ButtonWidth(Tr(L"Importuj…", L"Import…"));
+        D2D1_RECT_F c = SettingCard(x, y, right, kIconMove,
+                                    Tr(L"Przenieś na inny komputer", L"Move to another computer"),
+                                    Tr(L"Przypięte, kategorie, tagi, szablony, ustawienia",
+                                       L"Pinned items, categories, tags, templates, settings"),
                                     w1 + w2 + 8);
-        Button({c.left, c.top - 2, c.left + w1, c.bottom + 2}, HIT(0), L"Eksportuj…").click = [] {
-            ShowExportDialog();
-        };
-        Button({c.right - w2, c.top - 2, c.right, c.bottom + 2}, HIT(0), L"Importuj…").click = [] {
-            ShowImportDialog();
-        };
+        Button({c.left, c.top - 2, c.left + w1, c.bottom + 2}, HIT(0),
+               Tr(L"Eksportuj…", L"Export…"))
+            .click = [] { ShowExportDialog(); };
+        Button({c.right - w2, c.top - 2, c.right, c.bottom + 2}, HIT(0),
+               Tr(L"Importuj…", L"Import…"))
+            .click = [] { ShowImportDialog(); };
     }
     y += 8;
     EndScroll(g_pageScroll, view, y - top);
@@ -7511,113 +7727,125 @@ void ShowCategoryDialog(UINT64 id, std::function<void(UINT64)> created) {
     }
     SetFieldText(FCategoryName, existing ? existing->name : L"");
     g_fields[FCategoryName].onKey = nullptr;
-    ShowDialog(existing ? L"Edytuj kategorię" : L"Nowa kategoria", 440, [](D2D1_RECT_F b) {
-        const Theme& t = g_theme;
-        CategoryDraft& d = g_categoryDraft;
-        float x = b.left, right = b.right, y = b.top;
-        y = Label(L"Nazwa", x, y, right);
-        PlaceField(FCategoryName, {x, y, right, y + 32}, L"Np. Praca, Dom, Faktury");
-        y += 44;
-        y = Label(L"Emoji (opcjonalnie)", x, y, right);
-        int columns = 11;
-        float cell = (right - x) / columns;
-        for (int i = -1; i < (int)ARRAYSIZE(kEmojis); i++) {
-            int k = i + 1;
-            float cx = x + (k % columns) * cell, cy = y + (k / columns) * cell;
-            D2D1_RECT_F r{cx, cy, cx + cell, cy + cell};
-            Hit h = HIT(i);
-            bool selected = i < 0 ? d.emoji.empty() : d.emoji == kEmojis[i];
-            if (selected) {
-                Fill(Inset(r, 2, 2), t.hover, 4);
-                Stroke(Inset(r, 2, 2), t.accent, 4, 2);
-            } else {
-                Fill(Inset(r, 2, 2), SubtleFill(h), 4);
-            }
-            if (i < 0) {
-                Glyph(kIconCancel, g_fonts.icon12, r, t.text2);
-            } else {
-                Emoji(kEmojis[i], g_fonts.emoji16, r);
-            }
-            Region& region = Add(r, h);
-            region.click = [i] {
-                g_categoryDraft.emoji = i < 0 ? L"" : kEmojis[i];
-                Redraw();
-            };
-            if (i < 0) {
-                region.tip = L"Bez emoji: ikona folderu";
-            }
-        }
-        y += ((ARRAYSIZE(kEmojis) + 1 + columns - 1) / columns) * cell + 10;
-        y = Label(L"Kolor (opcjonalnie)", x, y, right);
-        float cx = x + 14;
-        for (BYTE c = 0; c < kColorCount; c++) {
-            Hit h = HIT(c);
-            float cy = y + 14;
-            if (d.color == c) {
-                CircleStroke(cx, cy, 14, t.text, 2);
-            } else if (Hot(h)) {
-                CircleStroke(cx, cy, 14, t.strong);
-            }
-            if (c == 0) {
-                CircleStroke(cx, cy, 10, t.strong);
-                Line(cx - 7, cy + 7, cx + 7, cy - 7, t.strong);
-            } else {
-                Circle(cx, cy, 10, CategoryColor(c));
-            }
-            Region& region = Add({cx - 15, y, cx + 15, y + 28}, h);
-            region.tip = kCategoryColors[c].name;
-            region.click = [c] {
-                g_categoryDraft.color = c;
-                Redraw();
-            };
-            cx += 38;
-        }
-        y += 40;
-        y = Label(L"Podgląd", x, y, right);
-        D2D1_RECT_F preview{x, y, right, y + 40};
-        Fill(preview, t.control, 6);
-        Stroke(preview, t.controlStroke, 6);
-        D2D1_RECT_F icon{x + 12, y + 12, x + 28, y + 28};
-        if (!d.emoji.empty()) {
-            Emoji(d.emoji, g_fonts.emoji16, Inset(icon, -4, -4));
-        } else {
-            Glyph(kIconFolder, g_fonts.icon16, icon, d.color ? CategoryColor(d.color) : t.text2);
-        }
-        std::wstring name = Trim(FieldText(FCategoryName));
-        float nameWidth = std::min(TextWidth(name.empty() ? L"Nazwa" : name, g_fonts.row),
-                                   right - x - 80);
-        Text(name.empty() ? L"Nazwa" : name, g_fonts.row, {x + 38, y, x + 38 + nameWidth, y + 40},
-             name.empty() ? t.text3 : t.text);
-        if (d.color && !d.emoji.empty()) {
-            Circle(x + 46 + nameWidth, y + 20, 3.5f, CategoryColor(d.color));
-        }
-        y += 56;
-        if (d.id) {
-            float dw = ButtonWidth(L"Usuń kategorię", kIconDelete);
-            D2D1_RECT_F del{x, y, x + dw, y + 32};
-            Hit h = HIT(0);
-            UINT64 id = d.id;
-            Button(del, h, L"Usuń kategorię", kIconDelete, kDanger).click = [del, h, id] {
-                const Category* c = FindCategory(id);
-                if (c && !ToggleFlyout(h)) {
-                    OpenConfirm(del, h,
-                                L"Usunąć kategorię „" + c->name +
-                                    L"”? Jej elementy zostaną w przypiętych, w „Bez kategorii”.",
-                                L"Usuń", [id] {
-                                    CloseDialog();
-                                    DeleteCategory(id);
-                                });
+    ShowDialog(
+        existing ? Tr(L"Edytuj kategorię", L"Edit category")
+                 : Tr(L"Nowa kategoria", L"New category"),
+        440,
+        [](D2D1_RECT_F b) {
+            const Theme& t = g_theme;
+            CategoryDraft& d = g_categoryDraft;
+            float x = b.left, right = b.right, y = b.top;
+            y = Label(Tr(L"Nazwa", L"Name"), x, y, right);
+            PlaceField(FCategoryName, {x, y, right, y + 32},
+                       Tr(L"Np. Praca, Dom, Faktury", L"E.g. Work, Home, Invoices"));
+            y += 44;
+            y = Label(Tr(L"Emoji (opcjonalnie)", L"Emoji (optional)"), x, y, right);
+            int columns = 11;
+            float cell = (right - x) / columns;
+            for (int i = -1; i < (int)ARRAYSIZE(kEmojis); i++) {
+                int k = i + 1;
+                float cx = x + (k % columns) * cell, cy = y + (k / columns) * cell;
+                D2D1_RECT_F r{cx, cy, cx + cell, cy + cell};
+                Hit h = HIT(i);
+                bool selected = i < 0 ? d.emoji.empty() : d.emoji == kEmojis[i];
+                if (selected) {
+                    Fill(Inset(r, 2, 2), t.hover, 4);
+                    Stroke(Inset(r, 2, 2), t.accent, 4, 2);
+                } else {
+                    Fill(Inset(r, 2, 2), SubtleFill(h), 4);
                 }
-            };
-            float bw = (right - del.right - 16) / 2;
-            Button({del.right + 8, y, del.right + 8 + bw, y + 32}, HIT(0), L"Zapisz", 0, kAccent,
-                   name.empty())
-                .click = SaveCategoryDraft;
-            Button({right - bw, y, right, y + 32}, HIT(0), L"Anuluj").click = [] { CloseDialog(); };
-            return y + 32;
-        }
-        return DialogButtons(b, y, L"Zapisz", !name.empty(), SaveCategoryDraft);
-    }, SaveCategoryDraft);
+                if (i < 0) {
+                    Glyph(kIconCancel, g_fonts.icon12, r, t.text2);
+                } else {
+                    Emoji(kEmojis[i], g_fonts.emoji16, r);
+                }
+                Region& region = Add(r, h);
+                region.click = [i] {
+                    g_categoryDraft.emoji = i < 0 ? L"" : kEmojis[i];
+                    Redraw();
+                };
+                if (i < 0) {
+                    region.tip = Tr(L"Bez emoji: ikona folderu", L"No emoji: folder icon");
+                }
+            }
+            y += ((ARRAYSIZE(kEmojis) + 1 + columns - 1) / columns) * cell + 10;
+            y = Label(Tr(L"Kolor (opcjonalnie)", L"Color (optional)"), x, y, right);
+            float cx = x + 14;
+            for (BYTE c = 0; c < kColorCount; c++) {
+                Hit h = HIT(c);
+                float cy = y + 14;
+                if (d.color == c) {
+                    CircleStroke(cx, cy, 14, t.text, 2);
+                } else if (Hot(h)) {
+                    CircleStroke(cx, cy, 14, t.strong);
+                }
+                if (c == 0) {
+                    CircleStroke(cx, cy, 10, t.strong);
+                    Line(cx - 7, cy + 7, cx + 7, cy - 7, t.strong);
+                } else {
+                    Circle(cx, cy, 10, CategoryColor(c));
+                }
+                Region& region = Add({cx - 15, y, cx + 15, y + 28}, h);
+                region.tip = kCategoryColors[c].name;
+                region.click = [c] {
+                    g_categoryDraft.color = c;
+                    Redraw();
+                };
+                cx += 38;
+            }
+            y += 40;
+            y = Label(Tr(L"Podgląd", L"Preview"), x, y, right);
+            D2D1_RECT_F preview{x, y, right, y + 40};
+            Fill(preview, t.control, 6);
+            Stroke(preview, t.controlStroke, 6);
+            D2D1_RECT_F icon{x + 12, y + 12, x + 28, y + 28};
+            if (!d.emoji.empty()) {
+                Emoji(d.emoji, g_fonts.emoji16, Inset(icon, -4, -4));
+            } else {
+                Glyph(kIconFolder, g_fonts.icon16, icon,
+                      d.color ? CategoryColor(d.color) : t.text2);
+            }
+            std::wstring name = Trim(FieldText(FCategoryName));
+            float nameWidth =
+                std::min(TextWidth(name.empty() ? Tr(L"Nazwa", L"Name") : name, g_fonts.row),
+                         right - x - 80);
+            Text(name.empty() ? Tr(L"Nazwa", L"Name") : name, g_fonts.row,
+                 {x + 38, y, x + 38 + nameWidth, y + 40}, name.empty() ? t.text3 : t.text);
+            if (d.color && !d.emoji.empty()) {
+                Circle(x + 46 + nameWidth, y + 20, 3.5f, CategoryColor(d.color));
+            }
+            y += 56;
+            if (d.id) {
+                float dw = ButtonWidth(Tr(L"Usuń kategorię", L"Delete category"), kIconDelete);
+                D2D1_RECT_F del{x, y, x + dw, y + 32};
+                Hit h = HIT(0);
+                UINT64 id = d.id;
+                Button(del, h, Tr(L"Usuń kategorię", L"Delete category"), kIconDelete, kDanger)
+                    .click = [del, h, id] {
+                    const Category* c = FindCategory(id);
+                    if (c && !ToggleFlyout(h)) {
+                        OpenConfirm(
+                            del, h,
+                            Tr(L"Usunąć kategorię „", L"Delete the category “") + c->name +
+                                Tr(L"”? Jej elementy zostaną w przypiętych, w „Bez kategorii”.",
+                                   L"”? Its items stay pinned, in “Uncategorized”."),
+                            Tr(L"Usuń", L"Delete"), [id] {
+                                CloseDialog();
+                                DeleteCategory(id);
+                            });
+                    }
+                };
+                float bw = (right - del.right - 16) / 2;
+                Button({del.right + 8, y, del.right + 8 + bw, y + 32}, HIT(0),
+                       Tr(L"Zapisz", L"Save"), 0, kAccent, name.empty())
+                    .click = SaveCategoryDraft;
+                Button({right - bw, y, right, y + 32}, HIT(0), Tr(L"Anuluj", L"Cancel")).click =
+                    [] { CloseDialog(); };
+                return y + 32;
+            }
+            return DialogButtons(b, y, Tr(L"Zapisz", L"Save"), !name.empty(), SaveCategoryDraft);
+        },
+        SaveCategoryDraft);
     g_fields[FCategoryName].onChange = [] { Redraw(); };
     UpdateWindow(g_hwnd);
     FocusField(FCategoryName);
@@ -7647,8 +7875,10 @@ void SaveTemplateDraft() {
     }
     Refresh();
     if (g_hotkeyFailed.contains(g_selectedId)) {
-        ShowToast(L"Zapisano szablon, ale skrót " + KeyName(d.hotkey) +
-                  L" zajął już inny program. Wybierz inny.");
+        ShowToast(Tr(L"Zapisano szablon, ale skrót ", L"Saved the template, but the shortcut ") +
+                  KeyName(d.hotkey) +
+                  Tr(L" zajął już inny program. Wybierz inny.",
+                     L" is already used by another app. Choose another one."));
     }
 }
 
@@ -7689,99 +7919,120 @@ void ShowTemplateDialog(UINT64 id) {
         return false;
     };
     g_fields[FTemplateName].onChange = g_fields[FTemplateBody].onChange = [] { Redraw(); };
-    ShowDialog(existing ? L"Edytuj szablon" : L"Nowy szablon", 480, [](D2D1_RECT_F b) {
-        const Theme& t = g_theme;
-        TemplateDraft& d = g_templateDraft;
-        float x = b.left, right = b.right, y = b.top;
-        y = Label(L"Nazwa", x, y, right);
-        D2D1_RECT_F emoji{x, y, x + 44, y + 32};
-        Hit eh = HIT(0);
-        Fill(emoji, t.control, 4);
-        Fill(emoji, SubtleFill(eh), 4);
-        Stroke(emoji, t.controlStroke, 4);
-        if (d.emoji.empty()) {
-            Glyph(kIconEmoji, g_fonts.icon16, emoji, t.text2);
-        } else {
-            Emoji(d.emoji, g_fonts.emoji20, emoji);
-        }
-        Region& er = Add(emoji, eh);
-        er.tip = L"Emoji szablonu";
-        er.click = [emoji, eh] {
-            if (!ToggleFlyout(eh)) {
-                OpenEmojiPicker(emoji, eh, [](std::wstring e) {
-                    g_templateDraft.emoji = e;
-                    Redraw();
-                });
+    ShowDialog(
+        existing ? Tr(L"Edytuj szablon", L"Edit template") : Tr(L"Nowy szablon", L"New template"),
+        480,
+        [](D2D1_RECT_F b) {
+            const Theme& t = g_theme;
+            TemplateDraft& d = g_templateDraft;
+            float x = b.left, right = b.right, y = b.top;
+            y = Label(Tr(L"Nazwa", L"Name"), x, y, right);
+            D2D1_RECT_F emoji{x, y, x + 44, y + 32};
+            Hit eh = HIT(0);
+            Fill(emoji, t.control, 4);
+            Fill(emoji, SubtleFill(eh), 4);
+            Stroke(emoji, t.controlStroke, 4);
+            if (d.emoji.empty()) {
+                Glyph(kIconEmoji, g_fonts.icon16, emoji, t.text2);
+            } else {
+                Emoji(d.emoji, g_fonts.emoji20, emoji);
             }
-        };
-        PlaceField(FTemplateName, {x + 52, y, right, y + 32}, L"Np. Podpis e-mail");
-        y += 44;
-        y = Label(L"Treść", x, y, right);
-        PlaceField(FTemplateBody, {x, y, right, y + 150}, L"Tekst, który wkleisz jednym kliknięciem");
-        y += 158;
-        Text(L"Wstaw pole:", g_fonts.small, {x, y, x + 80, y + 24}, t.text2);
-        float cx = x + 80;
-        for (const wchar_t* field : {L"{data}", L"{godzina}", L"{schowek}"}) {
-            float w = ChipWidth(field);
-            Chip(cx, y, HIT(field[1]), field, false, t.accentText).click = [field] {
-                InsertIntoBody(field);
-            };
-            cx += w + 6;
-        }
-        y += 36;
-        y = Label(L"Skrót (opcjonalnie)", x, y, right);
-        float kx = x;
-        if (g_recordTarget == kRecordTemplate) {
-            kx += Kbd(kx, y + 16, L"Naciśnij skrót… (Esc anuluje)", true) + 8;
-        } else if (d.hotkey && !(d.hotkey & kKeyOff)) {
-            kx += Kbd(kx, y + 16, KeyName(d.hotkey)) + 8;
-        } else {
-            Text(L"Brak", g_fonts.row, {kx, y, kx + 50, y + 32}, t.text3);
-            kx += 50;
-        }
-        float sw = ButtonWidth(L"Ustaw skrót…");
-        Button({kx, y, kx + sw, y + 32}, HIT(0), L"Ustaw skrót…").click = [] {
-            g_templateDraft.warning.clear();
-            StartRecording(kRecordTemplate, [](UINT key) {
-                UINT mods = key >> 16;
-                if (!(mods & (MOD_CONTROL | MOD_ALT | MOD_WIN))) {
-                    g_templateDraft.warning = L"Skrót szablonu musi mieć Ctrl, Alt albo Win, "
-                                              L"bo działa w każdym programie.";
-                } else {
-                    g_templateDraft.hotkey = key;
+            Region& er = Add(emoji, eh);
+            er.tip = Tr(L"Emoji szablonu", L"Template emoji");
+            er.click = [emoji, eh] {
+                if (!ToggleFlyout(eh)) {
+                    OpenEmojiPicker(emoji, eh, [](std::wstring e) {
+                        g_templateDraft.emoji = e;
+                        Redraw();
+                    });
                 }
-                Redraw();
-            });
-        };
-        kx += sw + 6;
-        if (d.hotkey) {
-            float rw = ButtonWidth(L"Usuń skrót");
-            Button({kx, y, kx + rw, y + 32}, HIT(0), L"Usuń skrót", 0, kSubtle).click = [] {
-                g_templateDraft.hotkey = 0;
-                Redraw();
             };
-        }
-        y += 38;
-        std::wstring conflict = ShortcutConflict(d.hotkey, -1, d.id);
-        std::wstring warning = !d.warning.empty()  ? d.warning
-                               : !conflict.empty() ? L"Ten sam skrót ma: " + conflict
-                                                   : L"";
-        if (!warning.empty()) {
-            Glyph(kIconWarning, g_fonts.icon12, {x, y, x + 14, y + 20}, t.warning);
-            Text(warning, g_fonts.small, {x + 20, y, right, y + 20}, t.warning);
-        } else {
-            Text(L"Skrót działa w każdym programie i od razu wkleja szablon.", g_fonts.small,
-                 {x, y, right, y + 20}, t.text2);
-        }
-        y += 34;
-        bool ok = !Trim(FieldText(FTemplateName)).empty() && !FieldText(FTemplateBody).empty();
-        return DialogButtons(b, y, L"Zapisz", ok, SaveTemplateDraft);
-    }, SaveTemplateDraft, [] {
-        if (g_recordTarget == kRecordTemplate) {
-            StopRecording();
-        }
-        CloseDialog();
-    });
+            PlaceField(FTemplateName, {x + 52, y, right, y + 32},
+                       Tr(L"Np. Podpis e-mail", L"E.g. Email signature"));
+            y += 44;
+            y = Label(Tr(L"Treść", L"Content"), x, y, right);
+            PlaceField(
+                FTemplateBody, {x, y, right, y + 150},
+                Tr(L"Tekst, który wkleisz jednym kliknięciem", L"Text you paste with one click"));
+            y += 158;
+            Text(Tr(L"Wstaw pole:", L"Insert field:"), g_fonts.small, {x, y, x + 80, y + 24},
+                 t.text2);
+            float cx = x + 80;
+            for (int i = 0; i < 3; i++) {
+                const wchar_t* field = kTemplateFields[i];
+                float w = ChipWidth(field);
+                Chip(cx, y, HIT(i), field, false, t.accentText).click = [field] {
+                    InsertIntoBody(field);
+                };
+                cx += w + 6;
+            }
+            y += 36;
+            y = Label(Tr(L"Skrót (opcjonalnie)", L"Shortcut (optional)"), x, y, right);
+            float kx = x;
+            if (g_recordTarget == kRecordTemplate) {
+                kx += Kbd(kx, y + 16,
+                          Tr(L"Naciśnij skrót… (Esc anuluje)", L"Press a shortcut… (Esc cancels)"),
+                          true) +
+                      8;
+            } else if (d.hotkey && !(d.hotkey & kKeyOff)) {
+                kx += Kbd(kx, y + 16, KeyName(d.hotkey)) + 8;
+            } else {
+                Text(Tr(L"Brak", L"None"), g_fonts.row, {kx, y, kx + 50, y + 32}, t.text3);
+                kx += 50;
+            }
+            float sw = ButtonWidth(Tr(L"Ustaw skrót…", L"Set shortcut…"));
+            Button({kx, y, kx + sw, y + 32}, HIT(0), Tr(L"Ustaw skrót…", L"Set shortcut…")).click =
+                [] {
+                    g_templateDraft.warning.clear();
+                    StartRecording(kRecordTemplate, [](UINT key) {
+                        UINT mods = key >> 16;
+                        if (!(mods & (MOD_CONTROL | MOD_ALT | MOD_WIN))) {
+                            g_templateDraft.warning =
+                                Tr(L"Skrót szablonu musi mieć Ctrl, Alt albo Win, "
+                                   L"bo działa w każdym programie.",
+                                   L"A template shortcut needs Ctrl, Alt or Win, because it works "
+                                   L"in every app.");
+                        } else {
+                            g_templateDraft.hotkey = key;
+                        }
+                        Redraw();
+                    });
+                };
+            kx += sw + 6;
+            if (d.hotkey) {
+                float rw = ButtonWidth(Tr(L"Usuń skrót", L"Remove shortcut"));
+                Button({kx, y, kx + rw, y + 32}, HIT(0), Tr(L"Usuń skrót", L"Remove shortcut"), 0,
+                       kSubtle)
+                    .click = [] {
+                    g_templateDraft.hotkey = 0;
+                    Redraw();
+                };
+            }
+            y += 38;
+            std::wstring conflict = ShortcutConflict(d.hotkey, -1, d.id);
+            std::wstring warning = !d.warning.empty() ? d.warning
+                                   : !conflict.empty()
+                                       ? Tr(L"Ten sam skrót ma: ", L"Also used by: ") + conflict
+                                       : L"";
+            if (!warning.empty()) {
+                Glyph(kIconWarning, g_fonts.icon12, {x, y, x + 14, y + 20}, t.warning);
+                Text(warning, g_fonts.small, {x + 20, y, right, y + 20}, t.warning);
+            } else {
+                Text(Tr(L"Skrót działa w każdym programie i od razu wkleja szablon.",
+                        L"The shortcut works in every app and pastes the template right away."),
+                     g_fonts.small, {x, y, right, y + 20}, t.text2);
+            }
+            y += 34;
+            bool ok = !Trim(FieldText(FTemplateName)).empty() && !FieldText(FTemplateBody).empty();
+            return DialogButtons(b, y, Tr(L"Zapisz", L"Save"), ok, SaveTemplateDraft);
+        },
+        SaveTemplateDraft,
+        [] {
+            if (g_recordTarget == kRecordTemplate) {
+                StopRecording();
+            }
+            CloseDialog();
+        });
     UpdateWindow(g_hwnd);
     FocusField(existing ? FTemplateBody : FTemplateName);
 }
@@ -7800,10 +8051,11 @@ void SetPasswordVisible(bool visible) {
 // The password field with its show/hide button; returns its bottom.
 float PasswordField(float x, float y, float right, bool* show) {
     D2D1_RECT_F field{x, y, right, y + 32};
-    PlaceField(FPassword, field, L"Hasło", 32);
+    PlaceField(FPassword, field, Tr(L"Hasło", L"Password"), 32);
     D2D1_RECT_F eye{right - 34, y + 3, right - 4, y + 29};
-    IconButton(eye, HIT(0), kIconEye, *show ? L"Ukryj hasło" : L"Pokaż hasło", g_theme.text2,
-               g_fonts.icon14)
+    IconButton(eye, HIT(0), kIconEye,
+               *show ? Tr(L"Ukryj hasło", L"Hide password") : Tr(L"Pokaż hasło", L"Show password"),
+               g_theme.text2, g_fonts.icon14)
         .click = [show] {
         *show = !*show;
         SetPasswordVisible(*show);
@@ -7820,12 +8072,12 @@ void StartExport() {
     if (!flags || d.busy || (d.protect && password.empty())) {
         return;
     }
-    std::wstring name = L"Schowek-kopia-" + FormatDatePattern(NowFileTime(), L"yyyy-MM-dd") +
-                        L".schowek";
-    COMDLG_FILTERSPEC filters[] = {{L"Kopia schowka", L"*.schowek"}};
+    std::wstring name = Tr(L"Schowek-kopia-", L"Clipboard-backup-") +
+                        FormatDatePattern(NowFileTime(), L"yyyy-MM-dd") + L".schowek";
+    COMDLG_FILTERSPEC filters[] = {{Tr(L"Kopia schowka", L"Clipboard backup"), L"*.schowek"}};
     std::wstring path;
-    if (!FileDialog<IFileSaveDialog>(CLSID_FileSaveDialog, L"Eksportuj dane", name.c_str(),
-                                     filters, 1, L"schowek", &path)) {
+    if (!FileDialog<IFileSaveDialog>(CLSID_FileSaveDialog, Tr(L"Eksportuj dane", L"Export data"),
+                                     name.c_str(), filters, 1, L"schowek", &path)) {
         return;
     }
     d.busy = true;
@@ -7833,8 +8085,9 @@ void StartExport() {
     ExportData(flags, path, std::move(password), [path](bool ok) {
         g_exportDraft.busy = false;
         CloseDialog();
-        ShowToast(ok ? L"Zapisano kopię „" + FileName(path) + L"”."
-                     : L"Nie udało się zapisać kopii. Sprawdź, czy folder jest dostępny.");
+        ShowToast(ok ? Tr(L"Zapisano kopię „", L"Saved the backup “") + FileName(path) + L"”."
+                     : Tr(L"Nie udało się zapisać kopii. Sprawdź, czy folder jest dostępny.",
+                          L"Couldn't save the backup. Check that the folder is available."));
     });
 }
 
@@ -7845,69 +8098,86 @@ void ShowExportDialog() {
     SetPasswordVisible(false);
     g_fields[FPassword].onChange = [] { Redraw(); };
     g_fields[FPassword].onKey = nullptr;
-    ShowDialog(L"Eksportuj dane", 460, [](D2D1_RECT_F b) {
-        const Theme& t = g_theme;
-        ExportDraft& d = g_exportDraft;
-        float x = b.left, right = b.right, y = b.top;
-        const wchar_t* intro =
-            L"Jeden plik do przeniesienia na inny komputer. Tam otwierasz go w Ustawienia › Importuj…";
-        float ih = TextHeight(intro, g_fonts.body, right - x);
-        Text(intro, g_fonts.body, {x, y, right, y + ih}, t.text2);
-        y += ih + 12;
-        struct Option {
-            bool* value;
-            std::wstring label;
-        };
-        Option options[] = {
-            {&d.pinned, L"Przypięte z kategoriami i tagami (" +
-                            std::to_wstring(CountItems(Kind::Pinned)) + L")"},
-            {&d.templates, L"Szablony (" + std::to_wstring(CountItems(Kind::Template)) + L")"},
-            {&d.settings, L"Ustawienia okna i wyglądu"},
-            {&d.history, L"Zwykła historia z obrazami (" +
-                             std::to_wstring(CountItems(Kind::History)) + L")"},
-        };
-        for (Option& o : options) {
-            bool* value = o.value;
-            Checkbox({x, y, right, y + 32}, HIT(value), o.label, *value).click = [value] {
-                *value = !*value;
+    ShowDialog(
+        Tr(L"Eksportuj dane", L"Export data"), 460,
+        [](D2D1_RECT_F b) {
+            const Theme& t = g_theme;
+            ExportDraft& d = g_exportDraft;
+            float x = b.left, right = b.right, y = b.top;
+            const wchar_t* intro =
+                Tr(L"Jeden plik do przeniesienia na inny komputer. Tam otwierasz go w Ustawienia › "
+                   L"Importuj…",
+                   L"One file to move to another computer. Open it there in Settings › Import…");
+            float ih = TextHeight(intro, g_fonts.body, right - x);
+            Text(intro, g_fonts.body, {x, y, right, y + ih}, t.text2);
+            y += ih + 12;
+            struct Option {
+                bool* value;
+                std::wstring label;
+            };
+            Option options[] = {
+                {&d.pinned, Tr(L"Przypięte z kategoriami i tagami (",
+                               L"Pinned items with categories and tags (") +
+                                std::to_wstring(CountItems(Kind::Pinned)) + L")"},
+                {&d.templates, Tr(L"Szablony (", L"Templates (") +
+                                   std::to_wstring(CountItems(Kind::Template)) + L")"},
+                {&d.settings, Tr(L"Ustawienia okna i wyglądu", L"Window and appearance settings")},
+                {&d.history, Tr(L"Zwykła historia z obrazami (", L"Regular history with images (") +
+                                 std::to_wstring(CountItems(Kind::History)) + L")"},
+            };
+            for (Option& o : options) {
+                bool* value = o.value;
+                Checkbox({x, y, right, y + 32}, HIT(value), o.label, *value).click = [value] {
+                    *value = !*value;
+                    Redraw();
+                };
+                y += 34;
+            }
+            y += 6;
+            Fill({x, y, right, y + 1}, t.divider);
+            y += 10;
+            Text(Tr(L"Chroń plik hasłem", L"Protect the file with a password"), g_fonts.row,
+                 {x, y, right - 50, y + 32}, t.text);
+            Toggle(right - 40, y + 16, HIT(0), d.protect).click = [] {
+                g_exportDraft.protect = !g_exportDraft.protect;
                 Redraw();
             };
-            y += 34;
-        }
-        y += 6;
-        Fill({x, y, right, y + 1}, t.divider);
-        y += 10;
-        Text(L"Chroń plik hasłem", g_fonts.row, {x, y, right - 50, y + 32}, t.text);
-        Toggle(right - 40, y + 16, HIT(0), d.protect).click = [] {
-            g_exportDraft.protect = !g_exportDraft.protect;
-            Redraw();
-        };
-        y += 40;
-        if (d.protect) {
-            y = PasswordField(x, y, right, &d.showPassword) + 6;
-            const wchar_t* hint = L"Bez tego hasła pliku nie otworzy nikt, także Ty, więc je zapisz.";
-            float hh = TextHeight(hint, g_fonts.body, right - x);
-            Text(hint, g_fonts.body, {x, y, right, y + hh}, t.text2);
-            y += hh + 16;
-        } else {
-            const wchar_t* warn = L"Plik bez hasła nie jest szyfrowany: każdy, kto go dostanie, "
-                                  L"przeczyta zawartość.";
-            float wh = TextHeight(warn, g_fonts.body, right - x - 24);
-            Glyph(kIconWarning, g_fonts.icon16, {x, y, x + 18, y + 20}, t.warning);
-            Text(warn, g_fonts.body, {x + 24, y, right, y + wh}, t.warning);
-            y += wh + 16;
-        }
-        bool any = d.pinned || d.templates || d.settings || d.history;
-        bool ok = any && !d.busy && (!d.protect || GetWindowTextLengthW(g_fields[FPassword].hwnd) > 0);
-        return DialogButtons(b, y, d.busy ? L"Zapisywanie…" : L"Zapisz plik…", ok, StartExport);
-    }, StartExport);
+            y += 40;
+            if (d.protect) {
+                y = PasswordField(x, y, right, &d.showPassword) + 6;
+                const wchar_t* hint =
+                    Tr(L"Bez tego hasła pliku nie otworzy nikt, także Ty, więc je zapisz.",
+                       L"Without this password nobody can open the file, you included, so write it "
+                       L"down.");
+                float hh = TextHeight(hint, g_fonts.body, right - x);
+                Text(hint, g_fonts.body, {x, y, right, y + hh}, t.text2);
+                y += hh + 16;
+            } else {
+                const wchar_t* warn = Tr(
+                    L"Plik bez hasła nie jest szyfrowany: każdy, kto go dostanie, "
+                    L"przeczyta zawartość.",
+                    L"A file without a password isn't encrypted: anyone who gets it can read it.");
+                float wh = TextHeight(warn, g_fonts.body, right - x - 24);
+                Glyph(kIconWarning, g_fonts.icon16, {x, y, x + 18, y + 20}, t.warning);
+                Text(warn, g_fonts.body, {x + 24, y, right, y + wh}, t.warning);
+                y += wh + 16;
+            }
+            bool any = d.pinned || d.templates || d.settings || d.history;
+            bool ok = any && !d.busy &&
+                      (!d.protect || GetWindowTextLengthW(g_fields[FPassword].hwnd) > 0);
+            return DialogButtons(
+                b, y, d.busy ? Tr(L"Zapisywanie…", L"Saving…") : Tr(L"Zapisz plik…", L"Save file…"),
+                ok, StartExport);
+        },
+        StartExport);
 }
 
 void ChooseImportFile() {
-    COMDLG_FILTERSPEC filters[] = {{L"Kopia schowka", L"*.schowek"}, {L"Wszystkie pliki", L"*.*"}};
+    COMDLG_FILTERSPEC filters[] = {{Tr(L"Kopia schowka", L"Clipboard backup"), L"*.schowek"},
+                                   {Tr(L"Wszystkie pliki", L"All files"), L"*.*"}};
     std::wstring path;
-    if (FileDialog<IFileOpenDialog>(CLSID_FileOpenDialog, L"Importuj dane", nullptr, filters, 2,
-                                    L"schowek", &path)) {
+    if (FileDialog<IFileOpenDialog>(CLSID_FileOpenDialog, Tr(L"Importuj dane", L"Import data"),
+                                    nullptr, filters, 2, L"schowek", &path)) {
         LoadImportFile(path);
         Redraw();
     }
@@ -7927,112 +8197,132 @@ void ShowImportDialog() {
         Redraw();
     };
     g_fields[FPassword].onKey = nullptr;
-    ShowDialog(L"Importuj dane", 480, [](D2D1_RECT_F b) {
-        const Theme& t = g_theme;
-        ImportState& s = g_import;
-        float x = b.left, right = b.right, y = b.top;
-        y = Label(L"Plik", x, y, right);
-        float cw = ButtonWidth(L"Wybierz…");
-        D2D1_RECT_F file{x, y, right - cw - 8, y + 32};
-        Fill(file, t.control, 4);
-        Stroke(file, t.controlStroke, 4);
-        Glyph(kIconFiles, g_fonts.icon14, {file.left + 8, file.top, file.left + 26, file.bottom},
-              t.text2);
-        Text(s.path.empty() ? L"Nie wybrano pliku" : FileName(s.path), g_fonts.row,
-             {file.left + 34, file.top, file.right - 8, file.bottom},
-             s.path.empty() ? t.text3 : t.text);
-        Button({right - cw, y, right, y + 32}, HIT(0), L"Wybierz…").click = ChooseImportFile;
-        y += 44;
-        if (s.encrypted && s.status != ImportState::Invalid && s.status != ImportState::Reading) {
-            y = Label(L"Hasło", x, y, right);
-            y = PasswordField(x, y, right, &g_showImportPassword) + 10;
-        }
-        std::wstring status;
-        D2D1_COLOR_F color = t.text2;
-        wchar_t glyph = kIconInfo;
-        switch (s.status) {
-            case ImportState::None:
-                status = L"Wybierz plik .schowek zapisany przez „Eksportuj dane”.";
-                break;
-            case ImportState::Reading:
-                status = L"Wczytywanie pliku…";
-                break;
-            case ImportState::NeedPassword:
-                status = L"Plik jest chroniony hasłem. Wpisz je, żeby zobaczyć, co zawiera.";
-                break;
-            case ImportState::Checking:
-                status = L"Sprawdzam hasło…";
-                break;
-            case ImportState::WrongPassword:
-                status = L"To hasło nie pasuje do pliku.";
-                color = t.danger;
-                glyph = kIconWarning;
-                break;
-            case ImportState::Invalid:
-                status = L"To nie jest plik kopii schowka albo jest uszkodzony.";
-                color = t.danger;
-                glyph = kIconWarning;
-                break;
-            case ImportState::Ready:
-                status = (s.encrypted ? L"Hasło poprawne. " : L"") + ImportSummary(*s.data);
-                color = t.text;
-                glyph = kIconCheck;
-                break;
-        }
-        float sh = TextHeight(status, g_fonts.body, right - x - 26);
-        Glyph(glyph, g_fonts.icon14, {x, y, x + 18, y + 20},
-              s.status == ImportState::Ready ? t.accent : color);
-        Text(status, g_fonts.body, {x + 26, y, right, y + sh}, color);
-        y += sh + 16;
-        if (s.status == ImportState::Ready) {
-            Text(L"Co zrobić z danymi na tym komputerze?", g_fonts.row, {x, y, right, y + 22}, t.text);
-            y += 28;
-            struct Mode {
-                bool replace;
-                const wchar_t* label;
-                const wchar_t* description;
-            };
-            static const Mode kModes[] = {
-                {false, L"Połącz z obecnymi", L"Dodam brakujące, duplikaty pominę"},
-                {true, L"Zastąp obecne", L"Najpierw zrobię kopię tego, co jest teraz"},
-            };
-            for (const Mode& m : kModes) {
-                D2D1_RECT_F r{x, y, right, y + 44};
-                Hit h = HIT(m.replace);
-                if (MouseOver(r)) {
-                    Fill(r, SubtleFill(h), 4);
+    ShowDialog(
+        Tr(L"Importuj dane", L"Import data"), 480,
+        [](D2D1_RECT_F b) {
+            const Theme& t = g_theme;
+            ImportState& s = g_import;
+            float x = b.left, right = b.right, y = b.top;
+            y = Label(Tr(L"Plik", L"File"), x, y, right);
+            float cw = ButtonWidth(Tr(L"Wybierz…", L"Choose…"));
+            D2D1_RECT_F file{x, y, right - cw - 8, y + 32};
+            Fill(file, t.control, 4);
+            Stroke(file, t.controlStroke, 4);
+            Glyph(kIconFiles, g_fonts.icon14,
+                  {file.left + 8, file.top, file.left + 26, file.bottom}, t.text2);
+            Text(s.path.empty() ? Tr(L"Nie wybrano pliku", L"No file chosen") : FileName(s.path),
+                 g_fonts.row, {file.left + 34, file.top, file.right - 8, file.bottom},
+                 s.path.empty() ? t.text3 : t.text);
+            Button({right - cw, y, right, y + 32}, HIT(0), Tr(L"Wybierz…", L"Choose…")).click =
+                ChooseImportFile;
+            y += 44;
+            if (s.encrypted && s.status != ImportState::Invalid &&
+                s.status != ImportState::Reading) {
+                y = Label(Tr(L"Hasło", L"Password"), x, y, right);
+                y = PasswordField(x, y, right, &g_showImportPassword) + 10;
+            }
+            std::wstring status;
+            D2D1_COLOR_F color = t.text2;
+            wchar_t glyph = kIconInfo;
+            switch (s.status) {
+                case ImportState::None:
+                    status = Tr(L"Wybierz plik .schowek zapisany przez „Eksportuj dane”.",
+                                L"Choose a .schowek file saved with “Export data”.");
+                    break;
+                case ImportState::Reading:
+                    status = Tr(L"Wczytywanie pliku…", L"Loading the file…");
+                    break;
+                case ImportState::NeedPassword:
+                    status = Tr(
+                        L"Plik jest chroniony hasłem. Wpisz je, żeby zobaczyć, co zawiera.",
+                        L"The file is protected with a password. Enter it to see what's inside.");
+                    break;
+                case ImportState::Checking:
+                    status = Tr(L"Sprawdzam hasło…", L"Checking the password…");
+                    break;
+                case ImportState::WrongPassword:
+                    status = Tr(L"To hasło nie pasuje do pliku.",
+                                L"This password doesn't match the file.");
+                    color = t.danger;
+                    glyph = kIconWarning;
+                    break;
+                case ImportState::Invalid:
+                    status = Tr(L"To nie jest plik kopii schowka albo jest uszkodzony.",
+                                L"This isn't a clipboard backup file, or it's damaged.");
+                    color = t.danger;
+                    glyph = kIconWarning;
+                    break;
+                case ImportState::Ready:
+                    status = (s.encrypted ? Tr(L"Hasło poprawne. ", L"Password correct. ") : L"") +
+                             ImportSummary(*s.data);
+                    color = t.text;
+                    glyph = kIconCheck;
+                    break;
+            }
+            float sh = TextHeight(status, g_fonts.body, right - x - 26);
+            Glyph(glyph, g_fonts.icon14, {x, y, x + 18, y + 20},
+                  s.status == ImportState::Ready ? t.accent : color);
+            Text(status, g_fonts.body, {x + 26, y, right, y + sh}, color);
+            y += sh + 16;
+            if (s.status == ImportState::Ready) {
+                Text(Tr(L"Co zrobić z danymi na tym komputerze?",
+                        L"What should happen to the data on this computer?"),
+                     g_fonts.row, {x, y, right, y + 22}, t.text);
+                y += 28;
+                struct Mode {
+                    bool replace;
+                    const wchar_t* label;
+                    const wchar_t* description;
+                };
+                const Mode kModes[] = {
+                    {false, Tr(L"Połącz z obecnymi", L"Merge with current data"),
+                     Tr(L"Dodam brakujące, duplikaty pominę",
+                        L"Adds what's missing, skips duplicates")},
+                    {true, Tr(L"Zastąp obecne", L"Replace current data"),
+                     Tr(L"Najpierw zrobię kopię tego, co jest teraz",
+                        L"Backs up the current data first")},
+                };
+                for (const Mode& m : kModes) {
+                    D2D1_RECT_F r{x, y, right, y + 44};
+                    Hit h = HIT(m.replace);
+                    if (MouseOver(r)) {
+                        Fill(r, SubtleFill(h), 4);
+                    }
+                    Radio({x + 4, y + 2, x + 28, y + 24}, h, s.replace == m.replace);
+                    Text(m.label, g_fonts.row, {x + 34, y, right, y + 24}, t.text);
+                    Text(m.description, g_fonts.small, {x + 34, y + 22, right, y + 40}, t.text2);
+                    bool replace = m.replace;
+                    Add(r, h).click = [replace] {
+                        g_import.replace = replace;
+                        Redraw();
+                    };
+                    y += 48;
                 }
-                Radio({x + 4, y + 2, x + 28, y + 24}, h, s.replace == m.replace);
-                Text(m.label, g_fonts.row, {x + 34, y, right, y + 24}, t.text);
-                Text(m.description, g_fonts.small, {x + 34, y + 22, right, y + 40}, t.text2);
-                bool replace = m.replace;
-                Add(r, h).click = [replace] {
-                    g_import.replace = replace;
-                    Redraw();
-                };
-                y += 48;
+                if (!s.data->settings.empty()) {
+                    Checkbox({x, y, right, y + 32}, HIT(0),
+                             Tr(L"Przenieś też ustawienia okna i wyglądu",
+                                L"Also bring the window and appearance settings"),
+                             s.withSettings)
+                        .click = [] {
+                        g_import.withSettings = !g_import.withSettings;
+                        Redraw();
+                    };
+                    y += 40;
+                }
+                y += 4;
             }
-            if (!s.data->settings.empty()) {
-                Checkbox({x, y, right, y + 32}, HIT(0), L"Przenieś też ustawienia okna i wyglądu",
-                         s.withSettings)
-                    .click = [] {
-                    g_import.withSettings = !g_import.withSettings;
-                    Redraw();
-                };
-                y += 40;
+            return DialogButtons(b, y, Tr(L"Importuj", L"Import"), s.status == ImportState::Ready,
+                                 [] {
+                                     CloseDialog();
+                                     ApplyImport();
+                                 });
+        },
+        [] {
+            if (g_import.status == ImportState::Ready) {
+                CloseDialog();
+                ApplyImport();
             }
-            y += 4;
-        }
-        return DialogButtons(b, y, L"Importuj", s.status == ImportState::Ready, [] {
-            CloseDialog();
-            ApplyImport();
         });
-    }, [] {
-        if (g_import.status == ImportState::Ready) {
-            CloseDialog();
-            ApplyImport();
-        }
-    });
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8040,8 +8330,10 @@ void ShowImportDialog() {
 
 void DrawSizeHint(D2D1_SIZE_F s) {
     const Theme& t = g_theme;
-    static const wchar_t* const kModes[] = {L"zapamiętam do restartu", L"zapamiętam na stałe",
-                                            L"po zamknięciu wróci domyślny"};
+    const wchar_t* const kModes[] = {
+        Tr(L"zapamiętam do restartu", L"remembered until restart"),
+        Tr(L"zapamiętam na stałe", L"remembered permanently"),
+        Tr(L"po zamknięciu wróci domyślny", L"back to default after closing")};
     WCHAR text[128];
     swprintf_s(text, L"%ld × %ld · %s", std::lround(g_sizeDip.width), std::lround(g_sizeDip.height),
                kModes[std::clamp<INT64>(Setting(L"sizeMode", 0), 0, 2)]);
@@ -8407,13 +8699,20 @@ struct EdDoc {
 
 constexpr UINT32 kEdColors[] = {0xFFFFFF, 0x1A1A1A, 0xE81123, 0xF7630C,
                                 0xFFB900, 0x16C60C, 0x0078D4, 0x8764B8};
-const wchar_t* const kEdColorNames[] = {L"Biały",  L"Czarny", L"Czerwony",  L"Pomarańczowy",
-                                        L"Żółty", L"Zielony", L"Niebieski", L"Fioletowy"};
-const wchar_t* const kShapeNames[] = {L"Strzałka", L"Linia",     L"Okrąg (z Shift: koło)",
-                                      L"Kwadrat",  L"Prostokąt", L"Dymek"};
+const Bilingual kEdColorNames[] = {{L"Biały", L"White"},    {L"Czarny", L"Black"},
+                                   {L"Czerwony", L"Red"},   {L"Pomarańczowy", L"Orange"},
+                                   {L"Żółty", L"Yellow"},   {L"Zielony", L"Green"},
+                                   {L"Niebieski", L"Blue"}, {L"Fioletowy", L"Purple"}};
+const Bilingual kShapeNames[] = {{L"Strzałka", L"Arrow"},
+                                 {L"Linia", L"Line"},
+                                 {L"Okrąg (z Shift: koło)", L"Ellipse (with Shift: circle)"},
+                                 {L"Kwadrat", L"Square"},
+                                 {L"Prostokąt", L"Rectangle"},
+                                 {L"Dymek", L"Speech bubble"}};
 constexpr float kEdTextSizes[] = {12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128};
-const wchar_t* const kAspectNames[] = {L"Dowolne", L"Jak oryginał", L"1:1",
-                                       L"4:3",     L"3:2",          L"16:9"};
+const Bilingual kAspectNames[] = {{L"Dowolne", L"Free"}, {L"Jak oryginał", L"Original"},
+                                  {L"1:1", L"1:1"},      {L"4:3", L"4:3"},
+                                  {L"3:2", L"3:2"},      {L"16:9", L"16:9"}};
 constexpr float kEdTitleHeight = 40;
 constexpr float kEdToolbarHeight = 48;
 constexpr float kEdOptionsHeight = 44;
@@ -9685,7 +9984,8 @@ void DrawEditorTitle(float width) {
     Editor& e = g_ed;
     Add({0, 0, width, kEdTitleHeight}, HIT(0)).caption = true;
     Glyph(kIconImage, g_fonts.icon14, {14, 0, 32, kEdTitleHeight}, t.text);
-    std::wstring title = e.viewOnly ? L"Podgląd obrazu" : L"Edytor grafiki";
+    std::wstring title = e.viewOnly ? Tr(L"Podgląd obrazu", L"Image viewer")
+                                    : Tr(L"Edytor grafiki", L"Image editor");
     WCHAR size[64];
     swprintf_s(size, L" · %u × %u", e.w, e.h);
     std::wstring detail = (e.source.empty() ? L"" : L" · " + e.source) + size;
@@ -9706,11 +10006,12 @@ void DrawEditorTitle(float width) {
     bx -= 46;
     IconButton({bx, 0, bx + 46, kEdTitleHeight}, HIT(0),
                zoomed ? kIconRestoreWindow : kIconMaximize,
-               zoomed ? L"Przywróć w dół" : L"Maksymalizuj", t.text, g_fonts.icon10)
+               zoomed ? Tr(L"Przywróć w dół", L"Restore down") : Tr(L"Maksymalizuj", L"Maximize"),
+               t.text, g_fonts.icon10)
         .click = [zoomed] { ShowWindow(g_ed.hwnd, zoomed ? SW_RESTORE : SW_MAXIMIZE); };
     bx -= 46;
-    IconButton({bx, 0, bx + 46, kEdTitleHeight}, HIT(0), kIconMinimize, L"Minimalizuj", t.text,
-               g_fonts.icon10)
+    IconButton({bx, 0, bx + 46, kEdTitleHeight}, HIT(0), kIconMinimize,
+               Tr(L"Minimalizuj", L"Minimize"), t.text, g_fonts.icon10)
         .click = [] { ShowWindow(g_ed.hwnd, SW_MINIMIZE); };
 }
 
@@ -9765,7 +10066,7 @@ void DrawToolbar(const D2D1_RECT_F& bar) {
             Fill({cx - 7, r.bottom - 5, cx + 7, r.bottom - 2}, t.accent, 1.5f);
         }
         Region& region = Add(r, h);
-        region.tip = Tip(L"Kształty", ScEdShape);
+        region.tip = Tip(Tr(L"Kształty", L"Shapes"), ScEdShape);
         region.click = [r, h] {
             if (g_ed.tool != Tool::Shape) {
                 SetTool(Tool::Shape);
@@ -9793,14 +10094,14 @@ void DrawToolbar(const D2D1_RECT_F& bar) {
     bool canUndo = !e.undo.empty() || e.editing >= 0, canRedo = !e.redo.empty();
     Region& undo = IconButton({x, y, x + 40, y + 36}, HIT(0), kIconUndo, nullptr,
                               canUndo ? t.text : t.text3);
-    undo.tip = Tip(L"Cofnij", ScEdUndo);
+    undo.tip = Tip(Tr(L"Cofnij", L"Undo"), ScEdUndo);
     if (canUndo) {
         undo.click = [] { Undo(false); };
     }
     x += 44;
     Region& redo = IconButton({x, y, x + 40, y + 36}, HIT(0), kIconRedo, nullptr,
                               canRedo ? t.text : t.text3);
-    redo.tip = Tip(L"Ponów", ScEdRedo);
+    redo.tip = Tip(Tr(L"Ponów", L"Redo"), ScEdRedo);
     if (canRedo) {
         redo.click = [] { Undo(true); };
     }
@@ -9819,7 +10120,7 @@ float OptDivider(float x, float cy) {
 
 float ColorSwatches(float x, float cy, UINT32 current) {
     const Theme& t = g_theme;
-    x = OptLabel(x, cy, L"Kolor");
+    x = OptLabel(x, cy, Tr(L"Kolor", L"Color"));
     for (int i = 0; i < (int)ARRAYSIZE(kEdColors); i++) {
         float sx = x + 12 + i * 28;
         Hit h = HIT(i);
@@ -9887,38 +10188,44 @@ void DrawOptions(const D2D1_RECT_F& bar) {
     }
     if (target && e.editing < 0) {
         // The selected object can go away from here too.
-        float w = ButtonWidth(L"Usuń", kIconDelete);
-        Button({right - w, cy - 15, right, cy + 15}, HIT(0), L"Usuń", kIconDelete).click = [] {
-            DeleteSelected();
-        };
+        float w = ButtonWidth(Tr(L"Usuń", L"Delete"), kIconDelete);
+        Button({right - w, cy - 15, right, cy + 15}, HIT(0), Tr(L"Usuń", L"Delete"), kIconDelete)
+            .click = [] { DeleteSelected(); };
         right -= w + 12;
     }
     switch (kind) {
         case Tool::Select:
             OptHint(x, cy, right,
-                    L"Kliknij rysunek, tekst, kształt lub zamazany obszar, aby go "
-                    L"przesunąć. Dwuklik na tekście go edytuje.");
+                    Tr(L"Kliknij rysunek, tekst, kształt lub zamazany obszar, aby go "
+                       L"przesunąć. Dwuklik na tekście go edytuje.",
+                       L"Click a drawing, text, shape or blurred area to move it. Double-click "
+                       L"text to edit it."));
             break;
         case Tool::Brush:
             x = ColorSwatches(x, cy, target ? target->color : e.color);
             x = OptDivider(x, cy);
-            WidthSlider(x, cy, L"Grubość", target ? target->width : e.brushWidth, 1, 40);
+            WidthSlider(x, cy, Tr(L"Grubość", L"Width"), target ? target->width : e.brushWidth, 1,
+                        40);
             break;
         case Tool::Highlighter:
             x = ColorSwatches(x, cy, target ? target->color : e.color);
             x = OptDivider(x, cy);
-            WidthSlider(x, cy, L"Grubość", target ? target->width : e.highlighterWidth, 4, 80);
+            WidthSlider(x, cy, Tr(L"Grubość", L"Width"),
+                        target ? target->width : e.highlighterWidth, 4, 80);
             break;
         case Tool::Eraser:
-            x = WidthSlider(x, cy, L"Rozmiar", e.eraserWidth, 4, 120);
-            OptHint(x + 8, cy, right,
-                    L"Wymazuje pędzel i zakreślacz. Kliknięty tekst lub kształt usuwa w całości.");
+            x = WidthSlider(x, cy, Tr(L"Rozmiar", L"Size"), e.eraserWidth, 4, 120);
+            OptHint(
+                x + 8, cy, right,
+                Tr(L"Wymazuje pędzel i zakreślacz. Kliknięty tekst lub kształt usuwa w całości.",
+                   L"Erases brush and highlighter strokes. Click text or a shape to delete it "
+                   L"whole."));
             break;
         case Tool::Text: {
             float size = target ? target->size : e.textSize;
             bool styles[3] = {target ? target->bold : e.bold, target ? target->italic : e.italic,
                               target ? target->underline : e.underline};
-            x = OptLabel(x, cy, L"Rozmiar");
+            x = OptLabel(x, cy, Tr(L"Rozmiar", L"Size"));
             std::vector<std::wstring> sizes;
             int selected = 0;
             for (int i = 0; i < (int)ARRAYSIZE(kEdTextSizes); i++) {
@@ -9963,35 +10270,40 @@ void DrawOptions(const D2D1_RECT_F& bar) {
             x = OptDivider(x + 6, cy);
             x = ColorSwatches(x, cy, target ? target->color : e.color);
             x = OptDivider(x, cy);
-            WidthSlider(x, cy, L"Grubość", target ? target->width : e.shapeWidth, 1, 40);
+            WidthSlider(x, cy, Tr(L"Grubość", L"Width"), target ? target->width : e.shapeWidth, 1,
+                        40);
             break;
         }
         case Tool::Blur:
-            x = WidthSlider(x, cy, L"Siła", target ? target->width : e.blurBlock, 4, 64);
+            x = WidthSlider(x, cy, Tr(L"Siła", L"Strength"), target ? target->width : e.blurBlock,
+                            4, 64);
             if (!target) {
-                OptHint(x + 8, cy, right, L"Zaznacz prostokątem dane, które chcesz ukryć.");
+                OptHint(x + 8, cy, right,
+                        Tr(L"Zaznacz prostokątem dane, które chcesz ukryć.",
+                           L"Drag a rectangle over the data you want to hide."));
             }
             break;
         case Tool::Crop: {
-            x = OptLabel(x, cy, L"Proporcje");
+            x = OptLabel(x, cy, Tr(L"Proporcje", L"Aspect ratio"));
             Combo({x, cy - 15, x + 140, cy + 15}, HIT(0),
                   std::vector<std::wstring>(std::begin(kAspectNames), std::end(kAspectNames)),
                   e.aspect, [](int i) { SetAspect(i); });
             x += 152;
-            x = OptLabel(x, cy, L"Wycinek:");
+            x = OptLabel(x, cy, Tr(L"Wycinek:", L"Selection:"));
             WCHAR size[64];
             swprintf_s(size, L"%ld × %ld px", std::lround(e.cropDraft.right - e.cropDraft.left),
                        std::lround(e.cropDraft.bottom - e.cropDraft.top));
             Text(size, g_fonts.row, {x - 6, cy - 15, x + 140, cy + 15}, t.text);
-            float applyWidth = ButtonWidth(L"Zastosuj (Enter)");
-            float cancelWidth = ButtonWidth(L"Anuluj (Esc)");
+            float applyWidth = ButtonWidth(Tr(L"Zastosuj (Enter)", L"Apply (Enter)"));
+            float cancelWidth = ButtonWidth(Tr(L"Anuluj (Esc)", L"Cancel (Esc)"));
             float bx = right - applyWidth;
-            Button({bx, cy - 15, right, cy + 15}, HIT(0), L"Zastosuj (Enter)", 0, kAccent).click =
-                [] { ApplyCrop(); };
+            Button({bx, cy - 15, right, cy + 15}, HIT(0), Tr(L"Zastosuj (Enter)", L"Apply (Enter)"),
+                   0, kAccent)
+                .click = [] { ApplyCrop(); };
             bx -= 8 + cancelWidth;
-            Button({bx, cy - 15, bx + cancelWidth, cy + 15}, HIT(0), L"Anuluj (Esc)").click = [] {
-                CancelCrop();
-            };
+            Button({bx, cy - 15, bx + cancelWidth, cy + 15}, HIT(0),
+                   Tr(L"Anuluj (Esc)", L"Cancel (Esc)"))
+                .click = [] { CancelCrop(); };
             break;
         }
     }
@@ -10068,9 +10380,10 @@ void DrawStage(const D2D1_RECT_F& stage) {
     region.dblclick = StageDoubleClick;
     ID2D1Bitmap* image = EditorImage();
     if (!image) {
-        const wchar_t* text = e.loading           ? L"Wczytuję obraz…"
-                              : !e.error.empty()  ? e.error.c_str()
-                                                  : L"Ten obraz jest za duży, by go tu pokazać.";
+        const wchar_t* text = e.loading ? Tr(L"Wczytuję obraz…", L"Loading the image…")
+                              : !e.error.empty() ? e.error.c_str()
+                                                 : Tr(L"Ten obraz jest za duży, by go tu pokazać.",
+                                                      L"This image is too large to show here.");
         Text(text, g_fonts.empty, stage, t.text2);
         PopClip();
         return;
@@ -10133,22 +10446,22 @@ void DrawEditorFooter(const D2D1_RECT_F& r) {
     Fill({r.left, r.top, r.right, r.top + 1}, t.divider);
     float cy = (r.top + r.bottom) / 2, x = 12;
     Region& out = IconButton({x, cy - 16, x + 32, cy + 16}, HIT(0), kIconZoomOut, nullptr);
-    out.tip = Tip(L"Pomniejsz", ScEdZoomOut);
+    out.tip = Tip(Tr(L"Pomniejsz", L"Zoom out"), ScEdZoomOut);
     out.click = [] { EdZoomStep(-1); };
     x += 32;
     Text(std::to_wstring(ZoomPercent()) + L" %", g_fonts.smallCenter, {x, cy - 16, x + 52, cy + 16},
          t.text);
     x += 52;
     Region& in = IconButton({x, cy - 16, x + 32, cy + 16}, HIT(0), kIconZoomIn, nullptr);
-    in.tip = Tip(L"Powiększ", ScEdZoomIn);
+    in.tip = Tip(Tr(L"Powiększ", L"Zoom in"), ScEdZoomIn);
     in.click = [] { EdZoomStep(1); };
     x += 40;
-    float fw = ButtonWidth(L"Dopasuj");
+    float fw = ButtonWidth(Tr(L"Dopasuj", L"Fit"));
     if (e.fitted) {
         Fill({x, cy - 16, x + fw, cy + 16}, t.hover, 4);
     }
-    Region& fit = Button({x, cy - 16, x + fw, cy + 16}, HIT(0), L"Dopasuj", 0, kSubtle);
-    fit.tip = Tip(L"Dopasuj do okna", ScEdFit);
+    Region& fit = Button({x, cy - 16, x + fw, cy + 16}, HIT(0), Tr(L"Dopasuj", L"Fit"), 0, kSubtle);
+    fit.tip = Tip(Tr(L"Dopasuj do okna", L"Fit to window"), ScEdFit);
     fit.click = [] { EdFit(); };
     x += fw + 4;
     float aw = ButtonWidth(L"100 %");
@@ -10156,21 +10469,21 @@ void DrawEditorFooter(const D2D1_RECT_F& r) {
         Fill({x, cy - 16, x + aw, cy + 16}, t.hover, 4);
     }
     Region& actual = Button({x, cy - 16, x + aw, cy + 16}, HIT(0), L"100 %", 0, kSubtle);
-    actual.tip = Tip(L"Rozmiar 100%", ScEdActual);
+    actual.tip = Tip(Tr(L"Rozmiar 100%", L"Actual size"), ScEdActual);
     actual.click = [] { EdSetZoom(EdActual(), StageCenter()); };
     x += aw + 16;
 
     float right = r.right - 16;
     bool ready = !e.pixels.empty();
     if (e.viewOnly) {
-        float cw = ButtonWidth(L"Zamknij");
-        Button({right - cw, cy - 16, right, cy + 16}, HIT(0), L"Zamknij").click = [] {
+        float cw = ButtonWidth(Tr(L"Zamknij", L"Close"));
+        Button({right - cw, cy - 16, right, cy + 16}, HIT(0), Tr(L"Zamknij", L"Close")).click = [] {
             CloseEditor();
         };
         right -= cw + 8;
-        float ew = ButtonWidth(L"Edytuj", kIconEdit);
-        Button({right - ew, cy - 16, right, cy + 16}, HIT(0), L"Edytuj", kIconEdit, kAccent,
-               !ready)
+        float ew = ButtonWidth(Tr(L"Edytuj", L"Edit"), kIconEdit);
+        Button({right - ew, cy - 16, right, cy + 16}, HIT(0), Tr(L"Edytuj", L"Edit"), kIconEdit,
+               kAccent, !ready)
             .click = [] {
             g_ed.viewOnly = false;
             EdFit();
@@ -10178,20 +10491,20 @@ void DrawEditorFooter(const D2D1_RECT_F& r) {
         right -= ew + 16;
     } else {
         bool canSave = ready && Unsaved();
-        const wchar_t* save = L"Zapisz jako nowy";
+        const wchar_t* save = Tr(L"Zapisz jako nowy", L"Save as new");
         float sw = ButtonWidth(save);
         Region& saveButton = Button({right - sw, cy - 16, right, cy + 16}, HIT(0), save, 0,
                                     kAccent, !canSave);
-        saveButton.tip = Tip(L"Zapisz jako nowy obraz", ScEdSave);
+        saveButton.tip = Tip(Tr(L"Zapisz jako nowy obraz", L"Save as a new image"), ScEdSave);
         saveButton.click = [] { SaveEditor(false); };
         right -= sw + 8;
-        float cw = ButtonWidth(L"Zapisz i kopiuj");
-        Button({right - cw, cy - 16, right, cy + 16}, HIT(0), L"Zapisz i kopiuj", 0, kStandard,
-               !canSave)
+        float cw = ButtonWidth(Tr(L"Zapisz i kopiuj", L"Save and copy"));
+        Button({right - cw, cy - 16, right, cy + 16}, HIT(0),
+               Tr(L"Zapisz i kopiuj", L"Save and copy"), 0, kStandard, !canSave)
             .click = [] { SaveEditor(true); };
         right -= cw + 8;
-        float xw = ButtonWidth(L"Anuluj");
-        Button({right - xw, cy - 16, right, cy + 16}, HIT(0), L"Anuluj").click = [] {
+        float xw = ButtonWidth(Tr(L"Anuluj", L"Cancel"));
+        Button({right - xw, cy - 16, right, cy + 16}, HIT(0), Tr(L"Anuluj", L"Cancel")).click = [] {
             CloseEditor();
         };
         right -= xw + 16;
@@ -10209,7 +10522,8 @@ void DrawEditorFooter(const D2D1_RECT_F& r) {
                        std::lround(c.bottom - c.top));
             info = size;
             if (!e.viewOnly) {
-                info += L" · zapis jako nowy obraz, oryginał bez zmian";
+                info += Tr(L" · zapis jako nowy obraz, oryginał bez zmian",
+                           L" · saves as a new image, the original stays as it is");
             }
         }
         Text(info, g_fonts.small, {x, cy - 16, right, cy + 16}, color);
@@ -10297,7 +10611,7 @@ bool SaveEditor(bool copy) {
     }
     std::string png;
     if (!RenderPng(&png)) {
-        e.message = L"Nie udało się zapisać obrazu.";
+        e.message = Tr(L"Nie udało się zapisać obrazu.", L"Couldn't save the image.");
         RedrawEditor();
         return false;
     }
@@ -10305,15 +10619,18 @@ bool SaveEditor(bool copy) {
     c->time = NowFileTime();
     c->png = std::move(png);
     auto* r = new Captured;
-    r->item.source = L"Edytor grafik";
+    r->item.source = Tr(L"Edytor grafik", L"Image editor");
     r->kind = e.kind == Kind::Pinned ? Kind::Pinned : Kind::History;
     r->category = e.category;
     r->copy = copy;
     Enqueue([c, r] { ProcessCapture(c, r); });
     e.savedVersion = e.doc.version;
-    std::wstring where = r->kind == Kind::Pinned ? L"Zapisano nowy obraz w przypiętych."
-                                                  : L"Zapisano nowy obraz na górze historii.";
-    e.message = copy ? where + L" Jest też w schowku." : where;
+    std::wstring where =
+        r->kind == Kind::Pinned
+            ? Tr(L"Zapisano nowy obraz w przypiętych.", L"Saved a new image to Pinned.")
+            : Tr(L"Zapisano nowy obraz na górze historii.",
+                 L"Saved a new image at the top of the history.");
+    e.message = copy ? where + Tr(L" Jest też w schowku.", L" It's also on the clipboard.") : where;
     RedrawEditor();
     return true;
 }
@@ -10573,20 +10890,23 @@ void AskToSave(std::function<void()> after) {
         }
     };
     ShowDialog(
-        L"Zapisać zmiany?", 460,
+        Tr(L"Zapisać zmiany?", L"Save changes?"), 460,
         [save, after](D2D1_RECT_F body) -> float {
             const wchar_t* text =
-                L"Obraz ma niezapisane zmiany. Zapisany trafi do schowka jako nowy obraz, a "
-                L"oryginał zostanie bez zmian.";
+                Tr(L"Obraz ma niezapisane zmiany. Zapisany trafi do schowka jako nowy obraz, a "
+                   L"oryginał zostanie bez zmian.",
+                   L"The image has unsaved changes. If you save them, it goes to the clipboard as "
+                   L"a new image, and the original stays as it is.");
             float th = TextHeight(text, g_fonts.body, body.right - body.left);
             Text(text, g_fonts.body, {body.left, body.top, body.right, body.top + th},
                  g_theme.text);
             float y = body.top + th + 24;
             float bw = (body.right - body.left - 16) / 3;
-            Button({body.left, y, body.left + bw, y + 32}, HIT(0), L"Zapisz", 0, kAccent).click =
-                save;
+            Button({body.left, y, body.left + bw, y + 32}, HIT(0), Tr(L"Zapisz", L"Save"), 0,
+                   kAccent)
+                .click = save;
             Button({body.left + bw + 8, y, body.left + 2 * bw + 8, y + 32}, HIT(0),
-                   L"Nie zapisuj")
+                   Tr(L"Nie zapisuj", L"Don't save"))
                 .click = [after] {
                 CloseDialog();
                 DestroyEditorWindow();
@@ -10594,9 +10914,8 @@ void AskToSave(std::function<void()> after) {
                     after();
                 }
             };
-            Button({body.right - bw, y, body.right, y + 32}, HIT(0), L"Anuluj").click = [] {
-                CloseDialog();
-            };
+            Button({body.right - bw, y, body.right, y + 32}, HIT(0), Tr(L"Anuluj", L"Cancel"))
+                .click = [] { CloseDialog(); };
             return y + 32;
         },
         save);
@@ -10868,7 +11187,7 @@ void LoadEditorImage(UINT64 id) {
             }
             e.loading = false;
             if (pixels.empty()) {
-                e.error = L"Nie udało się wczytać obrazu.";
+                e.error = Tr(L"Nie udało się wczytać obrazu.", L"Couldn't load the image.");
             } else {
                 e.w = w;
                 e.h = h;
@@ -10966,11 +11285,11 @@ void OpenEditor(UINT64 id, bool viewOnly) {
     g_edView = {};
     g_edView.render = RenderEditor;
     g_edView.dpi = dpi;
-    e.hwnd = CreateWindowExW(0, kEditorClass, L"Edytor grafiki",
-                             WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX |
-                                 WS_MAXIMIZEBOX,
-                             work.left + (workW - w) / 2, work.top + (workH - h) / 2, w, h,
-                             nullptr, nullptr, instance, nullptr);
+    e.hwnd =
+        CreateWindowExW(0, kEditorClass, Tr(L"Edytor grafiki", L"Image editor"),
+                        WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
+                        work.left + (workW - w) / 2, work.top + (workH - h) / 2, w, h, nullptr,
+                        nullptr, instance, nullptr);
     if (!e.hwnd) {
         Wh_Log(L"Can't open the editor: %u", GetLastError());
         return;
@@ -11026,8 +11345,20 @@ void ApplyWindowSizeSetting() {
 }
 
 void ApplyLook() {
+    INT64 language = Setting(L"language", 0);  // 0 follows Windows, 1 Polish, 2 English.
+    bool english =
+        language ? language == 2 : PRIMARYLANGID(GetUserDefaultUILanguage()) != LANG_POLISH;
+    if (english != g_english) {
+        g_english = english;
+        for (Item& it : g_items) {
+            if (it.imageWidth) {
+                FinishItem(it);  // The preview of an image names its type.
+            }
+        }
+    }
     LoadTheme();
     if (g_ed.hwnd) {
+        SetWindowTextW(g_ed.hwnd, Tr(L"Edytor grafiki", L"Image editor"));
         ApplyWindowTheme(g_ed.hwnd, kDwmBackdropMica);
         RedrawEditor();
     }
@@ -11221,17 +11552,18 @@ void TogglePanel() {
 void ShowTrayMenu(POINT pt) {
     HMENU menu = CreatePopupMenu();
     enum { kOpen = 1, kPause, kClear, kSettings };
-    std::wstring open = L"Otwórz schowek";
+    std::wstring open = Tr(L"Otwórz schowek", L"Open clipboard");
     if (!(g_keys[ScOpen] & kKeyOff) && g_keys[ScOpen]) {
         open += L"\t" + KeyName(g_keys[ScOpen]);
     }
     AppendMenuW(menu, MF_STRING, kOpen, open.c_str());
     SetMenuDefaultItem(menu, kOpen, FALSE);
-    AppendMenuW(menu, MF_STRING | (g_paused ? MF_CHECKED : 0), kPause, L"Wstrzymaj zapisywanie");
+    AppendMenuW(menu, MF_STRING | (g_paused ? MF_CHECKED : 0), kPause,
+                Tr(L"Wstrzymaj zapisywanie", L"Pause saving"));
     AppendMenuW(menu, MF_STRING | (CountItems(Kind::History) ? 0 : MF_GRAYED), kClear,
-                L"Wyczyść historię");
+                Tr(L"Wyczyść historię", L"Clear history"));
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kSettings, L"Ustawienia");
+    AppendMenuW(menu, MF_STRING, kSettings, Tr(L"Ustawienia", L"Settings"));
     SetForegroundWindow(g_hwnd);
     int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y,
                              0, g_hwnd, nullptr);
