@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['*/*.wh.cpp', '*/CHANGELOG.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Release new mod versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          meta() { sed -n "s|^//[[:space:]]*@$1[[:space:]]\+||p" "$2" | head -1 | tr -d '\r' | sed 's/[[:space:]]*$//'; }
+
+          for file in */*.wh.cpp; do
+            dir=${file%%/*}
+            id=$(meta id "$file")
+            name=$(meta name "$file")
+            version=$(meta version "$file")
+
+            if [[ "$id" != "$dir" || "$file" != "$dir/$id.wh.cpp" ]]; then
+              echo "::error file=$file::@id ($id) must match the folder and file name"
+              exit 1
+            fi
+
+            tag="$id-v$version"
+            if gh release view "$tag" > /dev/null 2>&1; then
+              continue
+            fi
+
+            notes=$(awk -v v="$version" '
+              index($0, "## [" v "]") == 1 { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' "$dir/CHANGELOG.md" 2> /dev/null || true)
+            if [[ -z "${notes//[[:space:]]/}" ]]; then
+              echo "::error file=$dir/CHANGELOG.md::No changelog entry for version $version"
+              exit 1
+            fi
+
+            flags=()
+            [[ "$version" == 0.* ]] && flags+=(--prerelease)
+            gh release create "$tag" "$file" --target "$GITHUB_SHA" \
+              --title "$name $version" --notes "$notes" "${flags[@]}"
+          done
