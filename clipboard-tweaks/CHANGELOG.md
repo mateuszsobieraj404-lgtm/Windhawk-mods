@@ -4,6 +4,13 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-14
+
+### Fixed
+
+- Win+V opened the built-in Windows clipboard while an app that runs as administrator, such as Windhawk, was in front. Clipboard Tweaks now takes Win+V over from Windows Explorer, starting with the next sign-in.
+- A custom shortcut for opening Clipboard Tweaks didn't work while an app that runs as administrator was in front.
+
 ## [0.7.1] - 2026-10-14
 
 ### Fixed
