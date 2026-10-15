@@ -3,11 +3,12 @@
 // @name            Clipboard Tweaks
 // @description     A modern clipboard manager that replaces Win+V: unlimited, encrypted history, pinned items, templates and an image editor
 // @description:pl-PL Nowoczesny schowek zamiast Win+V: historia bez limitu, szyfrowana, przypięte, szablony i edytor grafik
-// @version         0.7.2
+// @version         0.7.3
 // @author          Mateusz Sobieraj & Claude
 // @github          https://github.com/mateuszsobieraj404-lgtm
 // @homepage        https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/tree/main/clipboard-tweaks
 // @include         windhawk.exe
+// @include         explorer.exe
 // @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lbcrypt -lcrypt32 -lole32 -loleaut32 -loleacc -luuid -luxtheme -lshcore -lversion -lgdi32 -lshell32 -lshlwapi
 // @license         MIT
 // ==/WindhawkMod==
@@ -20,14 +21,14 @@ A modern clipboard manager that replaces the Windows Win+V panel with a Fluent
 2 window. It keeps everything you copy, without a limit and across restarts,
 and removes items only when you tell it to.
 
-> **Pre-release (0.7.2).** All planned features are in. Version 1.0.0 follows
+> **Pre-release (0.7.3).** All planned features are in. Version 1.0.0 follows
 > after a full round of testing.
 
 ## Features
 
 - **Replaces Win+V**: Win+V opens Clipboard Tweaks instead of the built-in
-  panel. Turn the mod off in Windhawk and the built-in panel comes back after
-  the next sign-in. The shortcut can be changed in the settings.
+  panel. Turn the mod off in Windhawk and the built-in panel comes back. The
+  shortcut can be changed in the settings.
 - **History without a limit**: text, formatted text (HTML, RTF), links,
   colors, images in their original resolution and copied files. Copying the
   same thing again moves it to the top instead of adding a duplicate.
@@ -113,15 +114,15 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 
 - Windows 11 22H2 or newer.
 - Windhawk 1.7.3 or newer.
+- The mod runs in its own Windhawk process. It also loads into Windows
+  Explorer, only to pass Win+V on while an app that runs as administrator is
+  in front.
 
 ## Known issues
 
 - Pasting into an app that runs as administrator doesn't work, because Windows
   doesn't let a regular app send keystrokes to it. The item is still put on
   the clipboard, so you can paste it with Ctrl+V.
-- Right after the mod is installed, Win+V still opens the built-in panel while
-  an app that runs as administrator, such as Windhawk, is in front. Windows
-  Explorer gives up Win+V the next time you sign in.
 
 ## Credits
 
@@ -202,7 +203,10 @@ enum : UINT {
     WM_APP_SAVE,                 // Coalesced index save.
     WM_APP_QUIT,                 // Mod unload.
     WM_APP_RECORD,               // A recorded shortcut: wParam vk, lParam modifiers.
+    WM_APP_WINV,                 // Win+V that Explorer got: 1 when the mod takes it.
 };
+
+constexpr wchar_t kWindowClass[] = L"ClipboardTweaks_" WH_MOD_VERSION;
 
 enum : UINT_PTR {
     kTimerScroll = 1,
@@ -2334,43 +2338,34 @@ void ApplyWindowsHistorySetting(bool disable) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Win+V in Explorer
+// Explorer's list of turned off Win shortcuts
 
-// Explorer takes Win+V for the built-in clipboard as it starts, unless V is in
-// this list. Until then only the keyboard hook can take Win+V, and Windows hides
-// keys from it in front of apps run as administrator.
 constexpr wchar_t kExplorerKey[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
 
-// Adds or removes the V. A V that was there before stays.
-void BlockExplorerWinV(bool block) {
-    if (block == (Wh_GetIntValue(L"winVBlocked", 0) != 0)) {
+// Version 0.7.2 added V to the list, which only worked from the next sign-in
+// and left Win+V dead after the mod was turned off. This takes it back out.
+void UndoExplorerWinVBlock() {
+    if (!Wh_GetIntValue(L"winVBlocked", 0)) {
         return;
     }
     WCHAR buffer[64];
     DWORD size = sizeof(buffer);
-    LSTATUS status = RegGetValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys",
-                                  RRF_RT_REG_SZ, nullptr, buffer, &size);
-    if (status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND) {
-        return;  // Not a short text: left as it is.
-    }
-    std::wstring keys = status == ERROR_SUCCESS ? buffer : L"";
-    size_t v = keys.find(L'V');
-    if (block) {
+    if (RegGetValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys", RRF_RT_REG_SZ,
+                     nullptr, buffer, &size) == ERROR_SUCCESS) {
+        std::wstring keys = buffer;
+        size_t v = keys.find(L'V');
         if (v != std::wstring::npos) {
-            return;
+            keys.erase(v, 1);
         }
-        keys += L'V';
-    } else if (v != std::wstring::npos) {
-        keys.erase(v, 1);
+        if (keys.empty()) {
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys");
+        } else {
+            RegSetKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys", REG_SZ,
+                            keys.c_str(), (DWORD)((keys.size() + 1) * sizeof(WCHAR)));
+        }
     }
-    if (keys.empty()) {
-        RegDeleteKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys");
-    } else {
-        RegSetKeyValueW(HKEY_CURRENT_USER, kExplorerKey, L"DisabledHotkeys", REG_SZ,
-                        keys.c_str(), (DWORD)((keys.size() + 1) * sizeof(WCHAR)));
-    }
-    Wh_SetIntValue(L"winVBlocked", block);
+    Wh_SetIntValue(L"winVBlocked", 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4549,7 +4544,8 @@ std::wstring SettingKey(int i) {
 constexpr int kOpenHotkeyId = 1;
 
 // The open shortcut is registered with Windows when it's free, so it works in
-// front of apps run as administrator too; otherwise the keyboard hook takes it.
+// front of apps run as administrator too; otherwise the keyboard hook takes it,
+// and Explorer hands over Win+V where the hook can't see it.
 void LoadShortcuts() {
     for (int i = 0; i < ScCount; i++) {
         g_keys[i] = (UINT)Setting(SettingKey(i).c_str(), kShortcuts[i].def);
@@ -4560,7 +4556,7 @@ void LoadShortcuts() {
     g_openRegistered = key && !(key & kKeyOff) &&
                        RegisterHotKey(g_hwnd, kOpenHotkeyId, (key >> 16) | MOD_NOREPEAT,
                                       key & 0xFFFF);
-    BlockExplorerWinV(key == Key(MOD_WIN, 'V'));
+    Wh_Log(L"Open shortcut %s", g_openRegistered ? L"registered" : L"left to the hook");
 }
 
 void SetShortcut(int i, UINT key) {
@@ -11924,6 +11920,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             TogglePanel();
             return 0;
 
+        case WM_APP_WINV:
+            if (g_openKey != Key(MOD_WIN, 'V')) {
+                return 0;
+            }
+            PostMessageW(hwnd, WM_APP_TOGGLE, 0, 0);  // Explorer waits for the answer.
+            return 1;
+
         case WM_APP_CALL: {
             auto* fn = (std::function<void()>*)lParam;
             (*fn)();
@@ -12148,7 +12151,7 @@ DWORD WINAPI UiThread(void*) {
     wc.lpfnWndProc = WndProc;
     wc.hInstance = GetModuleHandleW(nullptr);
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.lpszClassName = L"ClipboardTweaks_" WH_MOD_VERSION;
+    wc.lpszClassName = kWindowClass;
     RegisterClassExW(&wc);
     g_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"Clipboard Tweaks",
                              WS_POPUP | WS_THICKFRAME | WS_CLIPCHILDREN, 0, 0,
@@ -12214,6 +12217,7 @@ BOOL WhTool_ModInit() {
     }
     g_dataDir = dir;
     ApplyWindowsHistorySetting(Wh_GetIntSetting(L"disableWindowsHistory"));
+    UndoExplorerWinVBlock();
 
     g_uiReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_uiThread = CreateThread(nullptr, 0, UiThread, nullptr, 0, nullptr);
@@ -12237,11 +12241,75 @@ void WhTool_ModUninit() {
         WaitForSingleObject(g_uiThread, 30000);
     }
     ApplyWindowsHistorySetting(false);
-    // Explorer gets Win+V back as it starts next, unless the mod only ends with
-    // the session.
-    if (!GetSystemMetrics(SM_SHUTTINGDOWN)) {
-        BlockExplorerWinV(false);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Win+V in Explorer
+
+// Explorer has Win+V registered for the built-in clipboard. In front of apps run
+// as administrator, Windows hides keys from the keyboard hook, but a registered
+// shortcut still reaches Explorer. The mod also runs there and hands it over.
+
+bool g_isExplorer;
+
+using GetMessageW_t = decltype(&GetMessageW);
+GetMessageW_t GetMessageW_Original;
+using PeekMessageW_t = decltype(&PeekMessageW);
+PeekMessageW_t PeekMessageW_Original;
+
+// True when the mod's window takes the Win+V that Explorer got.
+bool HandOverWinV(const MSG* msg) {
+    if (msg->message != WM_HOTKEY || (LOWORD(msg->lParam) & ~MOD_NOREPEAT) != MOD_WIN ||
+        HIWORD(msg->lParam) != 'V') {
+        return false;
     }
+    HWND window = FindWindowW(kWindowClass, nullptr);
+    DWORD processId = 0;
+    if (!window || !GetWindowThreadProcessId(window, &processId)) {
+        return false;
+    }
+    AllowSetForegroundWindow(processId);
+    DWORD_PTR taken = 0;
+    bool handedOver = SendMessageTimeoutW(window, WM_APP_WINV, 0, 0, SMTO_ABORTIFHUNG, 500,
+                                          &taken) &&
+                      taken;
+    Wh_Log(L"Win+V from Explorer %s", handedOver ? L"handed over" : L"left to Windows");
+    return handedOver;
+}
+
+BOOL WINAPI GetMessageW_Hook(LPMSG msg, HWND hwnd, UINT min, UINT max) {
+    BOOL result = GetMessageW_Original(msg, hwnd, min, max);
+    if (result > 0 && HandOverWinV(msg)) {
+        msg->message = WM_NULL;
+    }
+    return result;
+}
+
+BOOL WINAPI PeekMessageW_Hook(LPMSG msg, HWND hwnd, UINT min, UINT max, UINT remove) {
+    BOOL result = PeekMessageW_Original(msg, hwnd, min, max, remove);
+    if (result && (remove & PM_REMOVE) && HandOverWinV(msg)) {
+        msg->message = WM_NULL;
+    }
+    return result;
+}
+
+bool IsExplorer() {
+    WCHAR path[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!length || length == ARRAYSIZE(path)) {
+        return false;
+    }
+    const wchar_t* name = wcsrchr(path, L'\\');
+    return name && !_wcsicmp(name + 1, L"explorer.exe");
+}
+
+BOOL ExplorerModInit() {
+    g_isExplorer = true;
+    Wh_SetFunctionHook((void*)GetMessageW, (void*)GetMessageW_Hook,
+                       (void**)&GetMessageW_Original);
+    Wh_SetFunctionHook((void*)PeekMessageW, (void*)PeekMessageW_Hook,
+                       (void**)&PeekMessageW_Original);
+    return TRUE;
 }
 
 // Windhawk tool mod implementation for mods which don't need to inject to other
@@ -12266,6 +12334,10 @@ void WINAPI EntryPoint_Hook() {
 }
 
 BOOL Wh_ModInit() {
+    if (IsExplorer()) {
+        return ExplorerModInit();
+    }
+
     DWORD sessionId;
     if (ProcessIdToSessionId(GetCurrentProcessId(), &sessionId) &&
         sessionId == 0) {
@@ -12406,7 +12478,7 @@ void Wh_ModAfterInit() {
 }
 
 void Wh_ModSettingsChanged() {
-    if (g_isToolModProcessLauncher) {
+    if (g_isToolModProcessLauncher || g_isExplorer) {
         return;
     }
 
@@ -12414,7 +12486,7 @@ void Wh_ModSettingsChanged() {
 }
 
 void Wh_ModUninit() {
-    if (g_isToolModProcessLauncher) {
+    if (g_isToolModProcessLauncher || g_isExplorer) {
         return;
     }
 

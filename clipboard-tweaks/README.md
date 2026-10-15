@@ -2,13 +2,13 @@
 
 A modern clipboard manager that replaces the Windows Win+V panel with a Fluent 2 window. It keeps everything you copy, without a limit and across restarts, and removes items only when you tell it to.
 
-> **Pre-release (0.7.2).** All planned features are in. Version 1.0.0 follows after a full round of testing.
+> **Pre-release (0.7.3).** All planned features are in. Version 1.0.0 follows after a full round of testing.
 
 [Download the latest version](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/releases?q=clipboard-tweaks&expanded=true) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/mateuszsobieraj404-lgtm/Windhawk-mods/issues/new)
 
 ## Features
 
-- **Replaces Win+V**: Win+V opens Clipboard Tweaks instead of the built-in panel. Turn the mod off in Windhawk and the built-in panel comes back after the next sign-in. The shortcut can be changed in the settings.
+- **Replaces Win+V**: Win+V opens Clipboard Tweaks instead of the built-in panel. Turn the mod off in Windhawk and the built-in panel comes back. The shortcut can be changed in the settings.
 - **History without a limit**: text, formatted text (HTML, RTF), links, colors, images in their original resolution and copied files. Copying the same thing again moves it to the top instead of adding a duplicate.
 - **Paste with one click**: click an item or press Enter to paste it into the window you were working in. Shift+Enter pastes plain text, and Ctrl+1…9 pastes the n-th item.
 - **Pinned items, organized**: pin anything you use often (Ctrl+P). Pinned items are kept until you remove them, and can have a category, #tags, an emoji and a color mark. Categories show in a side column or as collapsible sections.
@@ -58,11 +58,11 @@ Everything else is set on the mod's own settings page: **…** → **Settings**.
 
 - Windows 11 22H2 or newer.
 - Windhawk 1.7.3 or newer.
+- The mod runs in its own Windhawk process. It also loads into Windows Explorer, only to pass Win+V on while an app that runs as administrator is in front.
 
 ## Known issues
 
 - Pasting into an app that runs as administrator doesn't work, because Windows doesn't let a regular app send keystrokes to it. The item is still put on the clipboard, so you can paste it with Ctrl+V.
-- Right after the mod is installed, Win+V still opens the built-in panel while an app that runs as administrator, such as Windhawk, is in front. Windows Explorer gives up Win+V the next time you sign in.
 
 ## Credits
 
