@@ -4,6 +4,16 @@ All notable changes to Clipboard Tweaks are documented in this file. The format 
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-15
+
+### Fixed
+
+- Win+V still opened the built-in Windows clipboard while an app that runs as administrator, such as Windhawk, was in front. The mod now also loads into Windows Explorer and passes Win+V on from there, which works right away, without signing out.
+
+### Changed
+
+- Turning the mod off gives Win+V back to Windows right away again. The change version 0.7.2 made to Explorer's settings is undone automatically.
+
 ## [0.7.2] - 2026-10-14
 
 ### Fixed
